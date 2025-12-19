@@ -84,9 +84,19 @@ async function initializeGame() {
 
         // Verificar se precisa adicionar bot
         const playerCount = Object.keys(roomData.players || {}).length;
+        console.log('👥 Contagem de jogadores:', {
+            playerCount,
+            isHost: roomData.host === currentUser.uid,
+            players: Object.keys(roomData.players || {})
+        });
+        
         if (playerCount === 1 && roomData.host === currentUser.uid) {
             console.log('⚙️ Apenas 1 jogador detectado, adicionando bot...');
             await addBotPlayer();
+        } else {
+            console.log('ℹ️ Bot não necessário:', {
+                reason: playerCount > 1 ? 'Mais de 1 jogador' : 'Não é host'
+            });
         }
 
         // Inicializar jogo se for host e sala estiver cheia (ou com bot)
@@ -121,23 +131,42 @@ async function initializeGame() {
  * Configurar event listeners
  */
 function setupEventListeners() {
-    const leaveBtn = document.getElementById('leaveGameBtn');
-    const returnBtn = document.getElementById('returnToLobby');
+    console.log('🔧 Configurando event listeners...');
     
-    if (leaveBtn) {
-        // Remover listener antigo se existir
-        leaveBtn.removeEventListener('click', leaveGame);
-        // Adicionar novo listener
-        leaveBtn.addEventListener('click', leaveGame);
-        console.log('✅ Listener do botão Sair configurado');
+    // Garantir que o DOM está pronto
+    const setup = () => {
+        const leaveBtn = document.getElementById('leaveGameBtn');
+        const returnBtn = document.getElementById('returnToLobby');
+        
+        console.log('🔍 Procurando botões:', {
+            leaveBtn: !!leaveBtn,
+            returnBtn: !!returnBtn
+        });
+        
+        if (leaveBtn) {
+            // Remover listener antigo se existir
+            leaveBtn.removeEventListener('click', leaveGame);
+            // Adicionar novo listener
+            leaveBtn.addEventListener('click', leaveGame);
+            console.log('✅ Listener do botão Sair configurado');
+        } else {
+            console.error('❌ Botão leaveGameBtn não encontrado');
+        }
+        
+        if (returnBtn) {
+            returnBtn.removeEventListener('click', returnToLobby);
+            returnBtn.addEventListener('click', returnToLobby);
+            console.log('✅ Listener do botão Retornar configurado');
+        } else {
+            console.log('⚠️ Botão returnToLobby não encontrado (esperado no modal)');
+        }
+    };
+    
+    // Executar imediatamente ou após DOM estar pronto
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setup);
     } else {
-        console.error('❌ Botão leaveGameBtn não encontrado');
-    }
-    
-    if (returnBtn) {
-        returnBtn.removeEventListener('click', returnToLobby);
-        returnBtn.addEventListener('click', returnToLobby);
-        console.log('✅ Listener do botão Retornar configurado');
+        setup();
     }
 }
 
@@ -145,10 +174,22 @@ function setupEventListeners() {
  * Adicionar jogador bot
  */
 async function addBotPlayer() {
+    console.log('🤖 Função addBotPlayer() chamada');
+    
     try {
+        console.log('📊 Verificando sala:', {
+            roomId,
+            currentUser: currentUser?.uid
+        });
+        
         const botId = 'bot_' + Date.now();
         const botStyles = ['neon-circuit', 'arcane-sigil', 'minimal-prime', 'flux-ember'];
         const randomStyle = botStyles[Math.floor(Math.random() * botStyles.length)];
+        
+        console.log('⚙️ Criando bot:', {
+            botId,
+            style: randomStyle
+        });
         
         // Adicionar bot aos jogadores
         await dbRef.room(roomId).child('players').child(botId).set({
@@ -291,21 +332,7 @@ function generateCardsWithOwnership(style1, style2, cardsPerPlayer) {
         });
     }
     
-    return cardsplayer2Pile,
-                        collectedStyles: []
-                    }
-                },
-                currentTurn: firstPlayer,
-                lastRevealedCard: null,
-                lastAction: firebase.database.ServerValue.TIMESTAMP,
-                turnStartTime: firebase.database.ServerValue.TIMESTAMP
-            }
-        });
-
-        console.log('✅ Estado do jogo inicializado com sistema de posse');
-    } catch (error) {
-        console.error('❌ Erro ao inicializar estado:', error);
-    }
+    return cards;
 }
 
 /**
