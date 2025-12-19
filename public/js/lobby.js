@@ -1,12 +1,20 @@
 /**
  * Sistema de Lobby
- * Gerencia seleção de estilos e criação/entrada em salas
+ * Fluxo: Modo de Jogo → Escolha de Estilo → Salas
  */
 
 let currentUser = null;
 let userUnlockedStyles = [];
-let userSelectedStyle = 'neon';
+let userSelectedStyle = 'neon-circuit';
+let selectedGameMode = null;
 let roomsListener = null;
+
+// Estados das seções
+const SECTIONS = {
+    GAME_MODE: 'gameModeSection',
+    STYLES: 'stylesSection',
+    ROOMS: 'roomsSection'
+};
 
 /**
  * Inicialização
@@ -49,11 +57,11 @@ async function initializeLobby() {
             await StylesManager.saveUserSelectedStyle(currentUser.uid, userSelectedStyle);
         }
 
-        // Renderizar grade de estilos
-        renderStylesGrid();
+        // Preparar grade de estilos (mas não renderizar ainda)
+        // Apenas quando usuário escolher modo
 
-        // Carregar salas disponíveis
-        loadRooms();
+        // Mostrar primeira tela: Modos de Jogo
+        showSection(SECTIONS.GAME_MODE);
 
         // Configurar event listeners
         setupEventListeners();
@@ -71,6 +79,41 @@ function setupEventListeners() {
     // Botão de logout
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
+    // Botões de modo de jogo
+    document.querySelectorAll('.game-mode-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const mode = card.dataset.mode;
+            const comingSoon = card.querySelector('.coming-soon');
+            
+            if (comingSoon) {
+                showMessage('⚠️ Este modo estará disponível em breve!');
+                return;
+            }
+            
+            handleGameModeSelection(mode);
+        });
+    });
+
+    // Botão de voltar (estilos → modos)
+    document.getElementById('backToModes')?.addEventListener('click', () => {
+        showSection(SECTIONS.GAME_MODE);
+    });
+
+    // Botão de voltar (salas → estilos)
+    document.getElementById('backToStyles')?.addEventListener('click', () => {
+        // Parar de ouvir salas
+        if (roomsListener) {
+            dbRef.rooms().off('value', roomsListener);
+            roomsListener = null;
+        }
+        showSection(SECTIONS.STYLES);
+    });
+
+    // Botão confirmar estilo
+    document.getElementById('confirmStyleBtn')?.addEventListener('click', () => {
+        handleStyleConfirm();
+    });
+
     // Botão de criar sala
     document.getElementById('createRoomBtn')?.addEventListener('click', showCreateRoomModal);
 
@@ -84,6 +127,47 @@ function setupEventListeners() {
     // Modal de preview de estilo
     document.getElementById('selectStyleBtn')?.addEventListener('click', selectPreviewedStyle);
     document.getElementById('closePreviewBtn')?.addEventListener('click', hideStylePreviewModal);
+}
+
+/**
+ * Mostrar seção específica
+ */
+function showSection(sectionId) {
+    // Ocultar todas as seções
+    Object.values(SECTIONS).forEach(id => {
+        document.getElementById(id)?.classList.add('hidden');
+    });
+
+    // Mostrar seção solicitada
+    document.getElementById(sectionId)?.classList.remove('hidden');
+}
+
+/**
+ * Gerenciar seleção de modo de jogo
+ */
+function handleGameModeSelection(mode) {
+    selectedGameMode = mode;
+    console.log('🎮 Modo selecionado:', mode);
+    
+    // Ir para seleção de estilo
+    renderStylesGrid();
+    showSection(SECTIONS.STYLES);
+}
+
+/**
+ * Confirmar seleção de estilo e ir para salas
+ */
+function handleStyleConfirm() {
+    if (!userSelectedStyle) {
+        showMessage('⚠️ Selecione um estilo primeiro!');
+        return;
+    }
+    
+    console.log('🎨 Estilo confirmado:', userSelectedStyle);
+    
+    // Ir para tela de salas
+    loadRooms();
+    showSection(SECTIONS.ROOMS);
 }
 
 /**
@@ -320,23 +404,22 @@ async function createRoom() {
             id: roomId,
             name: roomName,
             host: currentUser.uid,
+            gameMode: selectedGameMode || 'casual',
             status: 'waiting',
             createdAt: firebase.database.ServerValue.TIMESTAMP,
+            maxPlayers: 2,
             players: {
                 [currentUser.uid]: {
                     uid: currentUser.uid,
                     name: currentUser.displayName || 'Jogador',
+                    email: currentUser.email,
                     style: userSelectedStyle,
                     score: 0,
-                    ready: true
+                    ready: true,
+                    connected: true
                 }
             },
-            gameState: {
-                currentTurn: null,
-                cards: [],
-                flippedCards: [],
-                matchedPairs: []
-            }
+            gameState: null // Será criado quando o segundo jogador entrar
         });
 
         console.log('✅ Sala criada:', roomId);
@@ -379,9 +462,11 @@ async function joinRoom(roomId) {
         await dbRef.room(roomId).child('players').child(currentUser.uid).set({
             uid: currentUser.uid,
             name: currentUser.displayName || 'Jogador',
+            email: currentUser.email,
             style: userSelectedStyle,
             score: 0,
-            ready: true
+            ready: true,
+            connected: true
         });
 
         // Atualizar status da sala

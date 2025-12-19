@@ -607,6 +607,126 @@ input:focus {
 }
 /* === ESTILOS DO JOGO DE POSSE === */
 
+/* Modo de Jogo Section */
+.game-mode-section {
+    padding: var(--spacing-2xl);
+    text-align: center;
+}
+
+.game-mode-section h2 {
+    font-size: 2rem;
+    margin-bottom: var(--spacing-2xl);
+    color: var(--text-primary);
+}
+
+.game-modes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--spacing-xl);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.game-mode-card {
+    position: relative;
+    background: var(--bg-medium);
+    border: 2px solid var(--bg-light);
+    border-radius: 16px;
+    padding: var(--spacing-2xl);
+    cursor: pointer;
+    transition: all var(--transition-medium);
+    text-align: center;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.game-mode-card:hover {
+    border-color: var(--primary);
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-lg);
+}
+
+.game-mode-card .mode-icon {
+    font-size: 4rem;
+    margin-bottom: var(--spacing-sm);
+}
+
+.game-mode-card h3 {
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.game-mode-card p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin: 0;
+}
+
+.game-mode-card .coming-soon {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: var(--warning);
+    color: var(--bg-dark);
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.game-mode-card:has(.coming-soon) {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.game-mode-card:has(.coming-soon):hover {
+    transform: none;
+    border-color: var(--bg-light);
+}
+
+/* Botão de voltar */
+.btn-back {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    cursor: pointer;
+    padding: var(--spacing-sm) var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    transition: var(--transition-fast);
+}
+
+.btn-back:hover {
+    color: var(--primary);
+}
+
+/* Botão grande */
+.btn-large {
+    width: 100%;
+    max-width: 400px;
+    margin: var(--spacing-xl) auto 0;
+    display: block;
+    font-size: 1.2rem;
+    padding: var(--spacing-md) var(--spacing-xl);
+}
+
+/* Estilos section com botão confirmar */
+.styles-section {
+    padding: var(--spacing-xl);
+}
+
+.styles-section h2 {
+    text-align: center;
+    margin-bottom: var(--spacing-xl);
+}
+
+/* === ESTILOS DO JOGO DE POSSE === */
+
 /* Header do jogo com timer */
 .game-header {
     display: flex;

@@ -20,16 +20,48 @@
         </header>
 
         <div class="lobby-content">
-            <!-- Seção de Estilos -->
-            <section class="styles-section">
+            <!-- Tela Inicial: Escolha de Modo de Jogo -->
+            <section id="gameModeSection" class="game-mode-section">
+                <h2>🎮 Como Deseja Jogar?</h2>
+                <div class="game-modes-grid">
+                    <button class="game-mode-card" data-mode="casual">
+                        <div class="mode-icon">🎲</div>
+                        <h3>Casual</h3>
+                        <p>Jogo rápido sem ranking</p>
+                    </button>
+                    <button class="game-mode-card" data-mode="ranked">
+                        <div class="mode-icon">🏆</div>
+                        <h3>Ranqueado</h3>
+                        <p>Competitivo com ranking</p>
+                        <span class="coming-soon">Em breve</span>
+                    </button>
+                    <button class="game-mode-card" data-mode="private">
+                        <div class="mode-icon">🔒</div>
+                        <h3>Sala Privada</h3>
+                        <p>Jogue com amigos</p>
+                    </button>
+                    <button class="game-mode-card" data-mode="training">
+                        <div class="mode-icon">🎯</div>
+                        <h3>Treino</h3>
+                        <p>Pratique contra IA</p>
+                        <span class="coming-soon">Em breve</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Seção de Estilos (oculta inicialmente) -->
+            <section id="stylesSection" class="styles-section hidden">
+                <button id="backToModes" class="btn-back">← Voltar</button>
                 <h2>Escolha seu Estilo de Cartas</h2>
                 <div id="stylesGrid" class="styles-grid">
                     <!-- Estilos serão carregados dinamicamente -->
                 </div>
+                <button id="confirmStyleBtn" class="btn btn-primary btn-large">Continuar</button>
             </section>
 
-            <!-- Seção de Salas -->
-            <section class="rooms-section">
+            <!-- Seção de Salas (oculta inicialmente) -->
+            <section id="roomsSection" class="rooms-section hidden">
+                <button id="backToStyles" class="btn-back">← Voltar</button>
                 <h2>Salas de Jogo</h2>
                 <div class="room-actions">
                     <button id="createRoomBtn" class="btn btn-primary">Criar Sala</button>
