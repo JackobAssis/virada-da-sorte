@@ -7,6 +7,10 @@ yarn-error.log
 .firebase/
 .firebaserc
 firebase-debug.log
+FIREBASE_CREDENTIALS_TEMPLATE.js
+
+# IMPORTANTE: Se você copiar firebase.js com credenciais reais,
+# adicione aqui ou use variáveis de ambiente
 
 # IDE
 .vscode/
