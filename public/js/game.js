@@ -82,8 +82,15 @@ async function initializeGame() {
         // Configurar listeners
         setupGameListeners();
 
-        // Inicializar jogo se for host e sala estiver cheia
-        if (roomData.host === currentUser.uid && roomData.status === 'full') {
+        // Verificar se precisa adicionar bot
+        const playerCount = Object.keys(roomData.players || {}).length;
+        if (playerCount === 1 && roomData.host === currentUser.uid) {
+            console.log('⚙️ Apenas 1 jogador detectado, adicionando bot...');
+            await addBotPlayer();
+        }
+
+        // Inicializar jogo se for host e sala estiver cheia (ou com bot)
+        if (roomData.host === currentUser.uid && (roomData.status === 'full' || playerCount >= 2)) {
             await initializeGameState();
         }
 
@@ -97,6 +104,12 @@ async function initializeGame() {
         monitorOpponentConnection();
 
         console.log('✅ Jogo inicializado');
+        
+        // Teste de botões
+        console.log('🔘 Testando botões:');
+        console.log('  - leaveGameBtn existe?', !!document.getElementById('leaveGameBtn'));
+        console.log('  - leaveGame função existe?', typeof window.leaveGame);
+        
     } catch (error) {
         console.error('❌ Erro ao inicializar jogo:', error);
         alert('Erro ao carregar jogo');
@@ -108,8 +121,61 @@ async function initializeGame() {
  * Configurar event listeners
  */
 function setupEventListeners() {
-    document.getElementById('leaveGameBtn')?.addEventListener('click', leaveGame);
-    document.getElementById('returnToLobby')?.addEventListener('click', returnToLobby);
+    const leaveBtn = document.getElementById('leaveGameBtn');
+    const returnBtn = document.getElementById('returnToLobby');
+    
+    if (leaveBtn) {
+        // Remover listener antigo se existir
+        leaveBtn.removeEventListener('click', leaveGame);
+        // Adicionar novo listener
+        leaveBtn.addEventListener('click', leaveGame);
+        console.log('✅ Listener do botão Sair configurado');
+    } else {
+        console.error('❌ Botão leaveGameBtn não encontrado');
+    }
+    
+    if (returnBtn) {
+        returnBtn.removeEventListener('click', returnToLobby);
+        returnBtn.addEventListener('click', returnToLobby);
+        console.log('✅ Listener do botão Retornar configurado');
+    }
+}
+
+/**
+ * Adicionar jogador bot
+ */
+async function addBotPlayer() {
+    try {
+        const botId = 'bot_' + Date.now();
+        const botStyles = ['neon-circuit', 'arcane-sigil', 'minimal-prime', 'flux-ember'];
+        const randomStyle = botStyles[Math.floor(Math.random() * botStyles.length)];
+        
+        // Adicionar bot aos jogadores
+        await dbRef.room(roomId).child('players').child(botId).set({
+            uid: botId,
+            name: '🤖 Bot',
+            email: 'bot@virada.game',
+            style: randomStyle,
+            score: 0,
+            ready: true,
+            connected: true,
+            isBot: true
+        });
+
+        // Atualizar status da sala
+        await dbRef.room(roomId).update({
+            status: 'full'
+        });
+
+        console.log('✅ Bot adicionado à sala');
+        
+        // Recarregar dados da sala
+        const roomSnapshot = await dbRef.room(roomId).once('value');
+        roomData = roomSnapshot.val();
+        
+    } catch (error) {
+        console.error('❌ Erro ao adicionar bot:', error);
+    }
 }
 
 /**
@@ -160,7 +226,37 @@ async function initializeGameState() {
         const player2Pile = shuffled.slice(halfPoint).map((card, index) => ({
             ...card,
             dono_atual: player2Id,
-            posicom propriedade (estilo real)
+            posicao_pilha: index
+        }));
+
+        const gameState = {
+            status: 'playing',
+            players: {
+                [player1Id]: {
+                    pile: player1Pile,
+                    collectedStyles: []
+                },
+                [player2Id]: {
+                    pile: player2Pile,
+                    collectedStyles: []
+                }
+            },
+            currentTurn: firstPlayer,
+            lastRevealedCard: null,
+            lastAction: firebase.database.ServerValue.TIMESTAMP,
+            turnStartTime: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        await dbRef.room(roomId).child('gameState').set(gameState);
+
+        console.log('✅ Estado do jogo inicializado');
+    } catch (error) {
+        console.error('❌ Erro ao inicializar estado:', error);
+    }
+}
+
+/**
+ * Gerar cartas com propriedade (estilo real)
  * @param {string} style1 - Estilo do jogador 1
  * @param {string} style2 - Estilo do jogador 2
  * @param {number} cardsPerPlayer - Quantas cartas de cada estilo
@@ -303,6 +399,9 @@ function handleGameStateUpdate(gameState) {
         startTurnTimer();
     } else {
         clearTurnTimer();
+        
+        // Se for turno do bot, jogar automaticamente
+        checkBotTurn(gameState);
     }
 }
 
@@ -369,6 +468,126 @@ async function autoRevealCard() {
     setTimeout(() => {
         revealTopCard();
     }, 1000);
+}
+
+/**
+ * Verificar se é turno do bot e jogar automaticamente
+ */
+async function checkBotTurn(gameState) {
+    const currentTurnPlayer = gameState.currentTurn;
+    
+    // Verificar se há jogadores na sala
+    if (!roomData || !roomData.players) return;
+    
+    // Verificar se o jogador atual é um bot
+    const currentPlayer = roomData.players[currentTurnPlayer];
+    if (!currentPlayer || !currentPlayer.isBot) return;
+    
+    // Bot detectado, jogar automaticamente após delay (simular pensamento)
+    const thinkingTime = 1500 + Math.random() * 1500; // 1.5s a 3s
+    
+    console.log('🤖 Bot detectado, jogando em', Math.round(thinkingTime / 1000), 'segundos...');
+    
+    setTimeout(async () => {
+        await botPlayTurn(currentTurnPlayer, gameState);
+    }, thinkingTime);
+}
+
+/**
+ * Bot joga seu turno
+ */
+async function botPlayTurn(botId, gameState) {
+    try {
+        // Usar transação para garantir consistência
+        await dbRef.room(roomId).child('gameState').transaction((currentState) => {
+            if (!currentState || !currentState.players) return;
+            
+            // Verificar se ainda é turno do bot
+            if (currentState.currentTurn !== botId) {
+                return; // Abortar se não for mais o turno do bot
+            }
+
+            const botPile = currentState.players[botId].pile;
+            
+            if (!botPile || botPile.length === 0) {
+                return; // Sem cartas para revelar
+            }
+
+            // Pegar carta do topo
+            const topCard = botPile[botPile.length - 1];
+            
+            // Revelar carta
+            topCard.estado = 'revelada';
+            
+            // Obter estilo do bot
+            const botStyle = roomData.players[botId].style;
+            const isMyStyle = topCard.estilo_real === botStyle;
+            
+            if (isMyStyle) {
+                // ✅ Carta é do bot! Manter turno e coletar
+                botPile.pop();
+                
+                if (!currentState.players[botId].collectedStyles) {
+                    currentState.players[botId].collectedStyles = [];
+                }
+                currentState.players[botId].collectedStyles.push(topCard);
+                
+                currentState.lastRevealedCard = {
+                    ...topCard,
+                    action: 'collected',
+                    by: botId
+                };
+                
+                // MANTÉM O TURNO
+                console.log('🤖 Bot coletou carta do seu estilo');
+                
+            } else {
+                // ❌ Carta é do oponente! Transferir e passar turno
+                const playerIds = Object.keys(currentState.players);
+                const opponentId = playerIds.find(id => id !== botId);
+                
+                botPile.pop();
+                
+                if (!currentState.players[opponentId].collectedStyles) {
+                    currentState.players[opponentId].collectedStyles = [];
+                }
+                currentState.players[opponentId].collectedStyles.push(topCard);
+                
+                // Transferir carta aleatória
+                const opponentPile = currentState.players[opponentId].pile;
+                
+                if (opponentPile && opponentPile.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * opponentPile.length);
+                    const transferredCard = opponentPile.splice(randomIndex, 1)[0];
+                    
+                    transferredCard.dono_atual = botId;
+                    transferredCard.estado = 'oculta';
+                    transferredCard.posicao_pilha = botPile.length;
+                    botPile.push(transferredCard);
+                }
+                
+                currentState.lastRevealedCard = {
+                    ...topCard,
+                    action: 'transferred',
+                    from: botId,
+                    to: opponentId
+                };
+                
+                // PASSAR TURNO
+                currentState.currentTurn = opponentId;
+                currentState.turnStartTime = firebase.database.ServerValue.TIMESTAMP;
+                
+                console.log('🤖 Bot revelou carta do oponente, turno passado');
+            }
+            
+            currentState.lastAction = firebase.database.ServerValue.TIMESTAMP;
+            
+            return currentState;
+        });
+
+    } catch (error) {
+        console.error('❌ Erro no turno do bot:', error);
+    }
 }
 
 /**
@@ -696,18 +915,32 @@ async function endGame(winnerId) {
  * Sair do jogo
  */
 async function leaveGame() {
+    console.log('🚪 Tentando sair da sala...');
+    
     try {
+        if (!roomId || !currentUser) {
+            console.log('⚠️ Sem roomId ou currentUser, redirecionando...');
+            window.location.href = 'lobby.html';
+            return;
+        }
+
+        console.log('📤 Removendo jogador da sala:', currentUser.uid);
+        
         // Remover jogador da sala
         await dbRef.room(roomId).child('players').child(currentUser.uid).remove();
+
+        console.log('✅ Jogador removido');
 
         // Verificar se sala ficou vazia
         const playersSnapshot = await dbRef.room(roomId).child('players').once('value');
         const players = playersSnapshot.val();
 
         if (!players || Object.keys(players).length === 0) {
+            console.log('🗑️ Sala vazia, deletando...');
             // Deletar sala se estiver vazia
             await dbRef.room(roomId).remove();
         } else {
+            console.log('⚙️ Atualizando status da sala...');
             // Atualizar status da sala
             await dbRef.room(roomId).update({
                 status: 'waiting'
@@ -722,13 +955,19 @@ async function leaveGame() {
             dbRef.room(roomId).child('players').off('value', playersListener);
         }
 
+        console.log('✅ Saindo para o lobby...');
         // Voltar ao lobby
         window.location.href = 'lobby.html';
     } catch (error) {
         console.error('❌ Erro ao sair do jogo:', error);
+        alert('Erro ao sair da sala: ' + error.message);
+        // Mesmo com erro, tentar voltar ao lobby
         window.location.href = 'lobby.html';
     }
 }
+
+// Tornar função global para teste
+window.leaveGame = leaveGame;
 
 /**
  * Voltar ao lobby

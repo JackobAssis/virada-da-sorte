@@ -12,7 +12,7 @@
 <body class="game-page">
     <div class="container">
         <header class="game-header">
-            <button id="leaveGameBtn" class="btn btn-secondary">Sair da Sala</button>
+            <button id="leaveGameBtn" class="btn btn-secondary" onclick="window.leaveGame ? window.leaveGame() : alert('Função não carregada')">Sair da Sala</button>
             <h2 id="roomNameDisplay">Sala</h2>
             <div class="header-info">
                 <div id="turnIndicator" class="turn-indicator">Aguardando...</div>
