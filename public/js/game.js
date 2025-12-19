@@ -1,6 +1,14 @@
 /**
  * Lógica do Jogo - Virada da Sorte
- * Gerencia a mecânica do jogo de memória multiplayer
+ * Jogo de Posse de Cartas - Coletar todas as cartas do seu estilo
+ * 
+ * MECÂNICA:
+ * - Cada jogador tem um estilo de carta (neon-circuit, arcane-sigil, etc)
+ * - Cartas são distribuídas em pilhas para cada jogador
+ * - Apenas a carta do TOPO pode ser revelada
+ * - Se revelar carta do SEU estilo: mantém turno e carta
+ * - Se revelar carta do OPONENTE: passa turno, carta vai para o dono, você recebe uma aleatória
+ * - Vitória: Primeiro a coletar TODAS as cartas do seu estilo
  */
 
 let currentUser = null;
@@ -8,12 +16,15 @@ let roomId = null;
 let roomData = null;
 let gameStateListener = null;
 let playersListener = null;
-let myStyle = 'neon';
+let myStyle = 'neon-circuit';
+let myPlayerId = null;
+let opponentId = null;
 let isMyTurn = false;
-let flippedCards = [];
-let canFlip = false;
+let canReveal = true;
+let turnTimer = null;
+const TURN_TIMEOUT = 30; // 30 segundos por turno
 
-// Símbolos disponíveis para o jogo
+// Símbolos disponíveis para as cartas
 const SYMBOLS = ['heart', 'star', 'diamond', 'clover', 'crown', 'moon', 'sun', 'lightning', 'fire', 'water'];
 
 /**
@@ -78,6 +89,12 @@ async function initializeGame() {
 
         // Configurar event listeners
         setupEventListeners();
+        
+        // Configurar sistema de presença
+        setupPresenceSystem();
+        
+        // Monitorar conexão do oponente
+        monitorOpponentConnection();
 
         console.log('✅ Jogo inicializado');
     } catch (error) {
@@ -117,26 +134,79 @@ function setupGameListeners() {
  */
 async function initializeGameState() {
     try {
-        // Gerar cartas (10 pares = 20 cartas)
-        const cards = generateCards(10);
+        const playerIds = Object.keys(roomData.players);
+        const player1Id = playerIds[0];
+        const player2Id = playerIds[1];
+        
+        const player1Style = roomData.players[player1Id].style;
+        const player2Style = roomData.players[player2Id].style;
+
+        // Gerar cartas com estilos de cada jogador (10 cartas de cada = 20 total)
+        const cards = generateCardsWithOwnership(player1Style, player2Style, 10);
 
         // Definir primeiro jogador aleatoriamente
-        const playerIds = Object.keys(roomData.players);
         const firstPlayer = playerIds[Math.floor(Math.random() * playerIds.length)];
 
-        // Salvar estado inicial
-        await dbRef.room(roomId).update({
-            status: 'playing',
-            gameState: {
-                cards: cards,
+        // Criar pilhas iniciais para cada jogador (distribuir cartas aleatoriamente)
+        const shuffled = shuffleArray(cards);
+        const halfPoint = Math.floor(shuffled.length / 2);
+        
+        const player1Pile = shuffled.slice(0, halfPoint).map((card, index) => ({
+            ...card,
+            dono_atual: player1Id,
+            posicao_pilha: index
+        }));
+        
+        const player2Pile = shuffled.slice(halfPoint).map((card, index) => ({
+            ...card,
+            dono_atual: player2Id,
+            posicom propriedade (estilo real)
+ * @param {string} style1 - Estilo do jogador 1
+ * @param {string} style2 - Estilo do jogador 2
+ * @param {number} cardsPerPlayer - Quantas cartas de cada estilo
+ */
+function generateCardsWithOwnership(style1, style2, cardsPerPlayer) {
+    const cards = [];
+    let cardId = 0;
+    
+    // Criar cartas do estilo do jogador 1
+    for (let i = 0; i < cardsPerPlayer; i++) {
+        const symbol = SYMBOLS[i % SYMBOLS.length];
+        cards.push({
+            id: cardId++,
+            symbol: symbol,
+            estilo_real: style1, // Dono verdadeiro (imutável)
+            dono_atual: null, // Será definido ao distribuir
+            estado: 'oculta', // oculta | revelada
+            posicao_pilha: 0 // Posição na pilha do dono atual
+        });
+    }
+    
+    // Criar cartas do estilo do jogador 2
+    for (let i = 0; i < cardsPerPlayer; i++) {
+        const symbol = SYMBOLS[i % SYMBOLS.length];
+        cards.push({
+            id: cardId++,
+            symbol: symbol,
+            estilo_real: style2,
+            dono_atual: null,
+            estado: 'oculta',
+            posicao_pilha: 0
+        });
+    }
+    
+    return cardsplayer2Pile,
+                        collectedStyles: []
+                    }
+                },
                 currentTurn: firstPlayer,
-                flippedCards: [],
-                matchedPairs: [],
-                lastAction: firebase.database.ServerValue.TIMESTAMP
+                lastRevealedCard: null,
+                lastAction: firebase.database.ServerValue.TIMESTAMP,
+                turnStartTime: firebase.database.ServerValue.TIMESTAMP
             }
         });
 
-        console.log('✅ Estado do jogo inicializado');
+        console.log('✅ Estado do jogo inicializado com sistema de posse');
     } catch (error) {
         console.error('❌ Erro ao inicializar estado:', error);
     }
@@ -203,14 +273,14 @@ function updatePlayersDisplay(players) {
  * Manipular atualização do estado do jogo
  */
 function handleGameStateUpdate(gameState) {
-    if (!gameState) return;
+    if (!gameState || !gameState.players) return;
 
     // Atualizar turno
     isMyTurn = gameState.currentTurn === currentUser.uid;
     const turnIndicator = document.getElementById('turnIndicator');
     
     if (turnIndicator) {
-        turnIndicator.textContent = isMyTurn ? 'Sua vez!' : 'Vez do oponente';
+        turnIndicator.textContent = isMyTurn ? '🎯 Sua vez!' : '⏳ Vez do oponente';
         turnIndicator.style.background = isMyTurn ? 'var(--primary)' : 'var(--bg-light)';
     }
 
@@ -219,250 +289,403 @@ function handleGameStateUpdate(gameState) {
         info.classList.remove('active');
     });
     
+    const playerIndex = Object.keys(gameState.players).indexOf(gameState.currentTurn);
+    document.getElementById(`player${playerIndex + 1}Info`)?.classList.add('active');
+
+    // Renderizar pilhas de cartas
+    renderPlayerPiles(gameState);
+
+    // Verificar condição de vitória
+    checkVictoryCondition(gameState);
+    
+    // Iniciar timer de turno se for minha vez
     if (isMyTurn) {
-        document.getElementById('player1Info')?.classList.add('active');
+        startTurnTimer();
     } else {
-        document.getElementById('player2Info')?.classList.add('active');
-    }
-
-    // Renderizar tabuleiro
-    renderBoard(gameState.cards || []);
-
-    // Verificar se jogo terminou
-    if (gameState.matchedPairs && gameState.matchedPairs.length === (gameState.cards.length / 2)) {
-        endGame();
+        clearTurnTimer();
     }
 }
 
 /**
- * Renderizar tabuleiro
+ * Iniciar timer do turno (30 segundos)
  */
-function renderBoard(cards) {
+function startTurnTimer() {
+    // Limpar timer existente
+    clearTurnTimer();
+
+    let timeLeft = TURN_TIMEOUT;
+    updateTimerDisplay(timeLeft);
+
+    turnTimer = setInterval(() => {
+        timeLeft--;
+        updateTimerDisplay(timeLeft);
+
+        if (timeLeft <= 0) {
+            clearTurnTimer();
+            if (isMyTurn) {
+                // Tempo esgotado, revelar carta automaticamente
+                autoRevealCard();
+            }
+        }
+    }, 1000);
+}
+
+/**
+ * Limpar timer do turno
+ */
+function clearTurnTimer() {
+    if (turnTimer) {
+        clearInterval(turnTimer);
+        turnTimer = null;
+    }
+}
+
+/**
+ * Atualizar display do timer
+ */
+function updateTimerDisplay(seconds) {
+    const timerElement = document.getElementById('turn-timer');
+    if (timerElement) {
+        timerElement.textContent = `⏱️ ${seconds}s`;
+        
+        // Adicionar alerta visual quando tempo estiver acabando
+        if (seconds <= 5) {
+            timerElement.classList.add('timer-warning');
+        } else {
+            timerElement.classList.remove('timer-warning');
+        }
+    }
+}
+
+/**
+ * Revelar carta automaticamente quando tempo acabar
+ */
+async function autoRevealCard() {
+    if (!isMyTurn) return;
+    
+    showMessage('⏰ Tempo esgotado! Revelando carta automaticamente...');
+    
+    // Aguardar 1 segundo e revelar
+    setTimeout(() => {
+        revealTopCard();
+    }, 1000);
+}
+
+/**
+ * Renderizar pilhas dos jogadores
+ */
+function renderPlayerPiles(gameState) {
     const gameBoard = document.getElementById('gameBoard');
     if (!gameBoard) return;
 
-    // Criar cards apenas uma vez
-    if (gameBoard.children.length === 0) {
-        cards.forEach((card, index) => {
-            const cardElement = createCardElement(card, index);
-            gameBoard.appendChild(cardElement);
-        });
-    } else {
-        // Atualizar estado dos cards existentes
-        cards.forEach((card, index) => {
-            const cardElement = gameBoard.children[index];
-            if (cardElement) {
-                updateCardElement(cardElement, card);
-            }
-        });
-    }
+    gameBoard.innerHTML = '';
+    gameBoard.className = 'game-board piles-layout';
 
-    // Atualizar permissão para virar cards
-    canFlip = isMyTurn && (!flippedCards || flippedCards.length < 2);
+    const playerIds = Object.keys(gameState.players);
+    
+    playerIds.forEach((playerId, index) => {
+        const playerState = gameState.players[playerId];
+        const pile = playerState.pile || [];
+        const isMe = playerId === currentUser.uid;
+        
+        // Container da pilha do jogador
+        const pileContainer = document.createElement('div');
+        pileContainer.className = `player-pile ${isMe ? 'my-pile' : 'opponent-pile'}`;
+        
+        // Título da pilha
+        const pileTitle = document.createElement('div');
+        pileTitle.className = 'pile-title';
+        pileTitle.textContent = isMe ? '🎴 Sua Pilha' : '🎴 Pilha do Oponente';
+        pileContainer.appendChild(pileTitle);
+        
+        // Info da pilha
+        const pileInfo = document.createElement('div');
+        pileInfo.className = 'pile-info';
+        pileInfo.innerHTML = `
+            <span>Cartas: ${pile.length}</span>
+            <span>Coletadas: ${playerState.collectedStyles?.length || 0}</span>
+        `;
+        pileContainer.appendChild(pileInfo);
+        
+        // Stack de cartas
+        const cardsStack = document.createElement('div');
+        cardsStack.className = 'cards-stack';
+        
+        if (pile.length > 0) {
+            // Mostrar apenas carta do topo
+            const topCard = pile[pile.length - 1];
+            const cardElement = createPileCardElement(topCard, isMe, isMyTurn && isMe);
+            cardsStack.appendChild(cardElement);
+        } else {
+            // Pilha vazia
+            const emptyMsg = document.createElement('div');
+            emptyMsg.className = 'empty-pile';
+            emptyMsg.textContent = 'Pilha vazia';
+            cardsStack.appendChild(emptyMsg);
+        }
+        
+        pileContainer.appendChild(cardsStack);
+        gameBoard.appendChild(pileContainer);
+    });
 }
 
 /**
- * Criar elemento de card
+ * Criar elemento de carta na pilha
  */
-function createCardElement(card, index) {
+function createPileCardElement(card, isMyPile, canInteract) {
     const cardElement = document.createElement('div');
-    cardElement.className = 'card';
+    cardElement.className = 'card pile-card';
     cardElement.setAttribute('data-card-id', card.id);
-    cardElement.setAttribute('data-symbol', card.symbol);
-    cardElement.setAttribute('data-index', index);
+    
+    if (card.estado === 'revelada') {
+        cardElement.classList.add('revealed');
+    }
+    
+    if (!canInteract) {
+        cardElement.classList.add('disabled');
+    }
 
     cardElement.innerHTML = `
         <div class="card-inner">
-            <div class="card-back"></div>
-            <div class="card-front"></div>
+            <div class="card-back ${card.estado === 'oculta' ? 'visible' : ''}">
+                <div class="card-back-pattern"></div>
+            </div>
+            <div class="card-front ${card.estado === 'revelada' ? 'visible' : ''}">
+                <div class="card-symbol">${getSymbolIcon(card.symbol)}</div>
+                <div class="card-style-indicator">${card.estilo_real}</div>
+            </div>
         </div>
     `;
 
-    // Aplicar estilo do jogador
-    StylesManager.applyStyleToCard(cardElement, myStyle, index);
+    // Aplicar estilo visual
+    StylesManager.applyStyleToCard(cardElement, card.estilo_real, card.id);
 
-    // Atualizar estado inicial
-    updateCardElement(cardElement, card);
-
-    // Event listener
-    cardElement.addEventListener('click', () => handleCardClick(card, cardElement));
+    // Event listener apenas para carta do topo da minha pilha
+    if (isMyPile && canInteract && card.estado === 'oculta') {
+        cardElement.addEventListener('click', () => revealTopCard());
+        cardElement.classList.add('clickable');
+    }
 
     return cardElement;
 }
 
 /**
- * Atualizar elemento de card
+ * Obter ícone do símbolo
  */
-function updateCardElement(cardElement, cardData) {
-    // Atualizar classes
-    cardElement.classList.toggle('flipped', cardData.flipped);
-    cardElement.classList.toggle('matched', cardData.matched);
-    cardElement.classList.toggle('disabled', cardData.matched);
+function getSymbolIcon(symbol) {
+    const icons = {
+        'heart': '❤️',
+        'star': '⭐',
+        'diamond': '💎',
+        'clover': '🍀',
+        'crown': '👑',
+        'moon': '🌙',
+        'sun': '☀️',
+        'lightning': '⚡',
+        'fire': '🔥',
+        'water': '💧'
+    };
+    return icons[symbol] || '❓';
 }
 
 /**
- * Manipular clique em card
+ * Revelar carta do topo (ação principal do jogo)
  */
-async function handleCardClick(card, cardElement) {
-    // Verificações
-    if (!canFlip) return;
-    if (card.matched) return;
-    if (card.flipped) return;
-    if (!isMyTurn) return;
+async function revealTopCard() {
+    if (!isMyTurn || !canReveal) {
+        showMessage('⚠️ Aguarde sua vez!');
+        return;
+    }
+
+    canReveal = false;
 
     try {
-        // Virar card localmente
-        cardElement.classList.add('flipped');
+        // Usar transação para evitar race conditions
+        await dbRef.room(roomId).child('gameState').transaction((currentState) => {
+            if (!currentState || !currentState.players) return;
+            
+            // Verificar se ainda é meu turno
+            if (currentState.currentTurn !== currentUser.uid) {
+                return; // Abortar transação
+            }
 
-        // Obter estado atual
-        const gameStateSnapshot = await dbRef.room(roomId).child('gameState').once('value');
-        const gameState = gameStateSnapshot.val();
+            const myPile = currentState.players[currentUser.uid].pile;
+            
+            if (!myPile || myPile.length === 0) {
+                return; // Sem cartas para revelar
+            }
 
-        const currentFlipped = gameState.flippedCards || [];
-
-        // Se já há 2 cards virados, não permitir mais
-        if (currentFlipped.length >= 2) return;
-
-        // Adicionar card aos virados
-        const newFlipped = [...currentFlipped, card.id];
-
-        // Atualizar cards
-        const updatedCards = gameState.cards.map(c => 
-            c.id === card.id ? { ...c, flipped: true } : c
-        );
-
-        // Salvar no Firebase
-        await dbRef.room(roomId).child('gameState').update({
-            flippedCards: newFlipped,
-            cards: updatedCards
+            // Pegar carta do topo
+            const topCard = myPile[myPile.length - 1];
+            
+            // Revelar carta
+            topCard.estado = 'revelada';
+            
+            // Verificar se a carta pertence ao meu estilo
+            const isMyStyle = topCard.estilo_real === myStyle;
+            
+            if (isMyStyle) {
+                // ✅ Carta é minha! Manter turno e coletar
+                
+                // Remover da pilha
+                myPile.pop();
+                
+                // Adicionar às cartas coletadas
+                if (!currentState.players[currentUser.uid].collectedStyles) {
+                    currentState.players[currentUser.uid].collectedStyles = [];
+                }
+                currentState.players[currentUser.uid].collectedStyles.push(topCard);
+                
+                // Incrementar pontuação
+                const playersSnapshot = roomData.players;
+                const currentScore = playersSnapshot[currentUser.uid]?.score || 0;
+                
+                // Atualizar score no Firebase (fora da transação)
+                setTimeout(() => {
+                    dbRef.room(roomId).child('players').child(currentUser.uid).update({
+                        score: currentScore + 1
+                    });
+                }, 100);
+                
+                currentState.lastRevealedCard = {
+                    ...topCard,
+                    action: 'collected',
+                    by: currentUser.uid
+                };
+                
+                // MANTÉM O TURNO (não muda currentTurn)
+                showMessage('✅ Carta sua! Continue jogando');
+                
+            } else {
+                // ❌ Carta é do oponente! Transferir e passar turno
+                
+                // Identificar oponente
+                const playerIds = Object.keys(currentState.players);
+                const opponentId = playerIds.find(id => id !== currentUser.uid);
+                
+                // Remover da minha pilha
+                myPile.pop();
+                
+                // Adicionar às cartas coletadas do oponente
+                if (!currentState.players[opponentId].collectedStyles) {
+                    currentState.players[opponentId].collectedStyles = [];
+                }
+                currentState.players[opponentId].collectedStyles.push(topCard);
+                
+                // Transferir uma carta aleatória do oponente para mim
+                const opponentPile = currentState.players[opponentId].pile;
+                
+                if (opponentPile && opponentPile.length > 0) {
+                    // Pegar carta aleatória (não necessariamente do topo)
+                    const randomIndex = Math.floor(Math.random() * opponentPile.length);
+                    const transferredCard = opponentPile.splice(randomIndex, 1)[0];
+                    
+                    // Adicionar à minha pilha
+                    transferredCard.dono_atual = currentUser.uid;
+                    transferredCard.estado = 'oculta'; // Resetar para oculta
+                    transferredCard.posicao_pilha = myPile.length;
+                    myPile.push(transferredCard);
+                }
+                
+                currentState.lastRevealedCard = {
+                    ...topCard,
+                    action: 'transferred',
+                    from: currentUser.uid,
+                    to: opponentId
+                };
+                
+                // PASSAR TURNO para o oponente
+                currentState.currentTurn = opponentId;
+                currentState.turnStartTime = firebase.database.ServerValue.TIMESTAMP;
+                
+                showMessage('📤 Carta do oponente! Turno passado');
+            }
+            
+            // Atualizar timestamp
+            currentState.lastAction = firebase.database.ServerValue.TIMESTAMP;
+            
+            return currentState;
         });
 
-        // Se virou 2 cards, verificar match
-        if (newFlipped.length === 2) {
-            canFlip = false;
-            setTimeout(() => checkMatch(newFlipped, updatedCards), 1000);
-        }
+        // Após transação, habilitar novamente após delay
+        setTimeout(() => {
+            canReveal = true;
+        }, 1500);
 
     } catch (error) {
-        console.error('❌ Erro ao virar card:', error);
+        console.error('❌ Erro ao revelar carta:', error);
+        canReveal = true;
+        showMessage('❌ Erro ao revelar carta');
     }
 }
 
 /**
- * Verificar se há match
+ * Verificar condição de vitória
+ * Vence quem coletar todas as 10 cartas do seu estilo primeiro
  */
-async function checkMatch(flippedIds, cards) {
-    try {
-        const card1 = cards.find(c => c.id === flippedIds[0]);
-        const card2 = cards.find(c => c.id === flippedIds[1]);
-
-        const isMatch = card1.symbol === card2.symbol;
-
-        // Obter estado atual
-        const gameStateSnapshot = await dbRef.room(roomId).child('gameState').once('value');
-        const gameState = gameStateSnapshot.val();
-
-        const playersSnapshot = await dbRef.room(roomId).child('players').once('value');
-        const players = playersSnapshot.val();
-
-        let updatedCards = [...cards];
-        let nextTurn = gameState.currentTurn;
-        let matchedPairs = gameState.matchedPairs || [];
-
-        if (isMatch) {
-            // Match! Marcar cards como matched
-            updatedCards = updatedCards.map(c => 
-                (c.id === flippedIds[0] || c.id === flippedIds[1]) 
-                    ? { ...c, matched: true, flipped: true }
-                    : c
-            );
-
-            // Adicionar pontos
-            const currentPlayer = players[currentUser.uid];
-            await dbRef.room(roomId).child('players').child(currentUser.uid).update({
-                score: (currentPlayer.score || 0) + 1
-            });
-
-            matchedPairs.push(card1.symbol);
-
-            showMessage('✅ Par encontrado!');
-
-            // Jogador mantém o turno
-        } else {
-            // Não houve match, desvirar cards
-            updatedCards = updatedCards.map(c => 
-                (c.id === flippedIds[0] || c.id === flippedIds[1]) 
-                    ? { ...c, flipped: false }
-                    : c
-            );
-
-            showMessage('❌ Não foi dessa vez');
-
-            // Passar turno para o próximo jogador
-            const playerIds = Object.keys(players);
-            const currentIndex = playerIds.indexOf(nextTurn);
-            nextTurn = playerIds[(currentIndex + 1) % playerIds.length];
+function checkVictoryCondition(gameState) {
+    if (!gameState || !gameState.players) return;
+    
+    // Verificar se algum jogador coletou 10 cartas do seu estilo
+    for (const playerId of Object.keys(gameState.players)) {
+        const playerData = gameState.players[playerId];
+        const collectedStyles = playerData.collectedStyles || [];
+        
+        // Vitória = 10 cartas coletadas
+        if (collectedStyles.length >= 10) {
+            endGame(playerId);
+            return;
         }
-
-        // Atualizar estado do jogo
-        await dbRef.room(roomId).child('gameState').update({
-            cards: updatedCards,
-            flippedCards: [],
-            currentTurn: nextTurn,
-            matchedPairs: matchedPairs,
-            lastAction: firebase.database.ServerValue.TIMESTAMP
-        });
-
-    } catch (error) {
-        console.error('❌ Erro ao verificar match:', error);
     }
 }
 
 /**
  * Finalizar jogo
  */
-async function endGame() {
+async function endGame(winnerId) {
     try {
         const playersSnapshot = await dbRef.room(roomId).child('players').once('value');
         const players = playersSnapshot.val();
 
-        const playerIds = Object.keys(players);
-        const scores = playerIds.map(id => ({
-            name: players[id].name,
-            score: players[id].score || 0,
-            uid: id
-        }));
+        const isWinner = winnerId === currentUser.uid;
+        const winnerName = players[winnerId]?.displayName || players[winnerId]?.name || 'Jogador';
 
-        // Ordenar por pontuação
-        scores.sort((a, b) => b.score - a.score);
-
-        const winner = scores[0];
-        const iWon = winner.uid === currentUser.uid;
-
-        // Atualizar estatísticas
-        const myStats = await dbRef.user(currentUser.uid).child('stats').once('value');
-        const stats = myStats.val() || { gamesPlayed: 0, gamesWon: 0, gamesLost: 0 };
-
-        await dbRef.user(currentUser.uid).child('stats').update({
-            gamesPlayed: stats.gamesPlayed + 1,
-            gamesWon: stats.gamesWon + (iWon ? 1 : 0),
-            gamesLost: stats.gamesLost + (iWon ? 0 : 1)
+        // Atualizar estado do jogo
+        await dbRef.room(roomId).child('gameState').update({
+            status: 'finished',
+            winner: winnerId,
+            endTime: firebase.database.ServerValue.TIMESTAMP
         });
 
-        // Mostrar modal
-        const modal = document.getElementById('gameOverModal');
-        const title = document.getElementById('gameOverTitle');
-        const message = document.getElementById('gameOverMessage');
-        const finalScore1 = document.getElementById('finalScore1');
-        const finalScore2 = document.getElementById('finalScore2');
+        // Atualizar estatísticas
+        const currentStats = players[currentUser.uid].stats || {};
+        const gamesPlayed = (currentStats.gamesPlayed || 0) + 1;
+        const gamesWon = (currentStats.gamesWon || 0) + (isWinner ? 1 : 0);
+        const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0;
 
-        title.textContent = iWon ? '🎉 Você Venceu!' : '😔 Você Perdeu';
-        message.textContent = `Vencedor: ${winner.name} com ${winner.score} pontos`;
+        await dbRef.room(roomId).child('players').child(currentUser.uid).update({
+            stats: {
+                gamesPlayed,
+                gamesWon,
+                winRate
+            }
+        });
 
-        finalScore1.textContent = `${scores[0].name}: ${scores[0].score} pontos`;
-        finalScore2.textContent = scores[1] ? `${scores[1].name}: ${scores[1].score} pontos` : '';
+        // Também atualizar no perfil global
+        await db.ref(`users/${currentUser.uid}`).update({
+            'stats/gamesPlayed': gamesPlayed,
+            'stats/gamesWon': gamesWon,
+            'stats/winRate': winRate
+        });
 
-        modal.classList.remove('hidden');
+        showMessage(isWinner ? `🎉 ${winnerName} venceu!` : `😔 ${winnerName} venceu!`);
+
+        // Mostrar modal de fim de jogo
+        setTimeout(() => {
+            if (confirm(isWinner ? '🎉 Parabéns! Você coletou todas as cartas do seu estilo! Jogar novamente?' : '😔 Fim de jogo. Tentar novamente?')) {
+                window.location.href = 'lobby.html';
+            }
+        }, 2000);
 
     } catch (error) {
         console.error('❌ Erro ao finalizar jogo:', error);
@@ -539,4 +762,77 @@ window.addEventListener('beforeunload', () => {
     if (playersListener) {
         dbRef.room(roomId).child('players').off('value', playersListener);
     }
+    
+    // Marcar jogador como desconectado
+    if (roomId && currentUser) {
+        dbRef.room(roomId).child('players').child(currentUser.uid).update({
+            connected: false,
+            disconnectedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
 });
+
+/**
+ * Monitorar presença do jogador usando Firebase Presence
+ */
+function setupPresenceSystem() {
+    if (!roomId || !currentUser) return;
+
+    const playerRef = dbRef.room(roomId).child('players').child(currentUser.uid);
+    const presenceRef = db.ref('.info/connected');
+
+    presenceRef.on('value', (snapshot) => {
+        if (snapshot.val() === true) {
+            // Conectado
+            playerRef.update({
+                connected: true,
+                lastSeen: firebase.database.ServerValue.TIMESTAMP
+            });
+
+            // Configurar onDisconnect para quando desconectar
+            playerRef.onDisconnect().update({
+                connected: false,
+                disconnectedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+    });
+}
+
+/**
+ * Monitorar desconexão do oponente
+ */
+function monitorOpponentConnection() {
+    if (!roomId || !roomData || !roomData.players) return;
+
+    const playerIds = Object.keys(roomData.players);
+    opponentId = playerIds.find(id => id !== currentUser.uid);
+
+    if (!opponentId) return;
+
+    // Listener para status de conexão do oponente
+    dbRef.room(roomId).child('players').child(opponentId).child('connected').on('value', (snapshot) => {
+        const isConnected = snapshot.val();
+        
+        if (isConnected === false) {
+            showMessage('⚠️ Oponente desconectado. Aguardando...');
+            
+            // Pausar jogo temporariamente
+            canReveal = false;
+            clearTurnTimer();
+            
+            // Se ficar desconectado por mais de 30 segundos, oferecer vitória por W.O.
+            setTimeout(async () => {
+                const connSnapshot = await dbRef.room(roomId).child('players').child(opponentId).child('connected').once('value');
+                if (connSnapshot.val() === false) {
+                    if (confirm('Oponente desconectado há muito tempo. Deseja reivindicar vitória por W.O.?')) {
+                        await endGame(currentUser.uid);
+                    }
+                }
+            }, 30000); // 30 segundos
+        } else {
+            showMessage('✅ Oponente reconectado!');
+            canReveal = isMyTurn;
+        }
+    });
+}
+
