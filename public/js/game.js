@@ -74,13 +74,10 @@ async function initializeGame() {
         }
 
         // Obter estilo do jogador
-        myStyle = roomData.players[currentUser.uid].style || 'neon';
+        myStyle = roomData.players[currentUser.uid].style || 'neon-circuit';
 
         // Exibir nome da sala
         document.getElementById('roomNameDisplay').textContent = roomData.name;
-
-        // Configurar listeners
-        setupGameListeners();
 
         // Verificar se precisa adicionar bot
         const playerCount = Object.keys(roomData.players || {}).length;
@@ -110,25 +107,38 @@ async function initializeGame() {
         const currentPlayerCount = Object.keys(roomData.players || {}).length;
         console.log('👥 Contagem atual de jogadores:', currentPlayerCount);
 
-        // Inicializar jogo se for host e tiver 2 jogadores
-        if (roomData.host === currentUser.uid && currentPlayerCount >= 2) {
-            console.log('🎮 Iniciando jogo como host...');
-            await initializeGameState();
-        } else {
-            console.log('⏳ Aguardando inicialização do jogo:', {
-                isHost: roomData.host === currentUser.uid,
-                playerCount: currentPlayerCount
-            });
-        }
-
-        // Configurar event listeners
+        // Configurar event listeners ANTES de inicializar o jogo
         setupEventListeners();
+        
+        // Configurar listeners do Firebase ANTES de inicializar
+        setupGameListeners();
         
         // Configurar sistema de presença
         setupPresenceSystem();
         
         // Monitorar conexão do oponente
         monitorOpponentConnection();
+
+        // Verificar se gameState já existe
+        console.log('🔍 Verificando se gameState já existe...');
+        const gameStateSnapshot = await dbRef.room(roomId).child('gameState').once('value');
+        const existingGameState = gameStateSnapshot.val();
+        
+        if (existingGameState) {
+            console.log('✅ GameState já existe, carregando...');
+            handleGameStateUpdate(existingGameState);
+        } else {
+            // Inicializar jogo se for host e tiver 2 jogadores
+            if (roomData.host === currentUser.uid && currentPlayerCount >= 2) {
+                console.log('🎮 Iniciando novo jogo como host...');
+                await initializeGameState();
+            } else {
+                console.log('⏳ Aguardando inicialização do jogo:', {
+                    isHost: roomData.host === currentUser.uid,
+                    playerCount: currentPlayerCount
+                });
+            }
+        }
 
         console.log('✅ Jogo inicializado');
         
@@ -240,17 +250,23 @@ async function addBotPlayer() {
  * Configurar listeners do Firebase
  */
 function setupGameListeners() {
+    console.log('🔧 Configurando listeners do Firebase...');
+    
     // Listener para mudanças nos jogadores
     playersListener = dbRef.room(roomId).child('players').on('value', (snapshot) => {
         const players = snapshot.val();
+        console.log('👥 Players atualizado:', players);
         updatePlayersDisplay(players);
     });
 
     // Listener para mudanças no estado do jogo
     gameStateListener = dbRef.room(roomId).child('gameState').on('value', (snapshot) => {
         const gameState = snapshot.val();
+        console.log('🎮 GameState atualizado via listener:', gameState);
         handleGameStateUpdate(gameState);
     });
+    
+    console.log('✅ Listeners configurados');
 }
 
 /**
@@ -260,6 +276,13 @@ async function initializeGameState() {
     console.log('🎮 Iniciando estado do jogo...');
     
     try {
+        // Verificar se gameState já existe para evitar duplicação
+        const gameStateCheck = await dbRef.room(roomId).child('gameState').once('value');
+        if (gameStateCheck.val()) {
+            console.log('⚠️ GameState já existe, não será recriado');
+            return;
+        }
+        
         console.log('📊 Dados da sala:', {
             roomData,
             players: roomData?.players
@@ -336,7 +359,18 @@ async function initializeGameState() {
         console.log('💾 Salvando estado no Firebase...');
         await dbRef.room(roomId).child('gameState').set(gameState);
 
+        // Atualizar status da sala para 'playing'
+        await dbRef.room(roomId).update({
+            status: 'playing',
+            gameStartedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
         console.log('✅ Estado do jogo inicializado com sucesso!');
+        
+        // Forçar atualização da interface
+        console.log('🔄 Disparando atualização inicial da interface...');
+        handleGameStateUpdate(gameState);
+        
     } catch (error) {
         console.error('❌ Erro ao inicializar estado:', error);
         console.error('Stack trace:', error.stack);
@@ -443,11 +477,24 @@ function updatePlayersDisplay(players) {
  * Manipular atualização do estado do jogo
  */
 function handleGameStateUpdate(gameState) {
-    if (!gameState || !gameState.players) return;
+    console.log('🔄 handleGameStateUpdate chamado:', gameState);
+    
+    if (!gameState || !gameState.players) {
+        console.log('⚠️ GameState inválido ou sem jogadores');
+        return;
+    }
+
+    console.log('✅ GameState válido, atualizando interface...');
 
     // Atualizar turno
     isMyTurn = gameState.currentTurn === currentUser.uid;
     const turnIndicator = document.getElementById('turnIndicator');
+    
+    console.log('🎯 Turno:', {
+        currentTurn: gameState.currentTurn,
+        isMyTurn,
+        myId: currentUser.uid
+    });
     
     if (turnIndicator) {
         turnIndicator.textContent = isMyTurn ? '🎯 Sua vez!' : '⏳ Vez do oponente';
@@ -668,18 +715,30 @@ async function botPlayTurn(botId, gameState) {
  * Renderizar pilhas dos jogadores
  */
 function renderPlayerPiles(gameState) {
+    console.log('🎨 Renderizando pilhas dos jogadores...');
+    
     const gameBoard = document.getElementById('gameBoard');
-    if (!gameBoard) return;
+    if (!gameBoard) {
+        console.error('❌ gameBoard não encontrado!');
+        return;
+    }
 
     gameBoard.innerHTML = '';
     gameBoard.className = 'game-board piles-layout';
 
     const playerIds = Object.keys(gameState.players);
+    console.log('👥 Renderizando para jogadores:', playerIds);
     
     playerIds.forEach((playerId, index) => {
         const playerState = gameState.players[playerId];
         const pile = playerState.pile || [];
         const isMe = playerId === currentUser.uid;
+        
+        console.log(`📚 Pilha de ${isMe ? 'você' : 'oponente'}:`, {
+            cartas: pile.length,
+            coletadas: playerState.collectedStyles?.length || 0,
+            topCard: pile.length > 0 ? pile[pile.length - 1] : null
+        });
         
         // Container da pilha do jogador
         const pileContainer = document.createElement('div');
@@ -709,17 +768,23 @@ function renderPlayerPiles(gameState) {
             const topCard = pile[pile.length - 1];
             const cardElement = createPileCardElement(topCard, isMe, isMyTurn && isMe);
             cardsStack.appendChild(cardElement);
+            
+            console.log(`✅ Carta do topo renderizada para ${isMe ? 'você' : 'oponente'}`);
         } else {
             // Pilha vazia
             const emptyMsg = document.createElement('div');
             emptyMsg.className = 'empty-pile';
             emptyMsg.textContent = 'Pilha vazia';
             cardsStack.appendChild(emptyMsg);
+            
+            console.log(`⚠️ Pilha vazia para ${isMe ? 'você' : 'oponente'}`);
         }
         
         pileContainer.appendChild(cardsStack);
         gameBoard.appendChild(pileContainer);
     });
+    
+    console.log('✅ Renderização de pilhas concluída');
 }
 
 /**
