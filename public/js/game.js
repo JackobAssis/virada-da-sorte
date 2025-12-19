@@ -93,15 +93,32 @@ async function initializeGame() {
         if (playerCount === 1 && roomData.host === currentUser.uid) {
             console.log('⚙️ Apenas 1 jogador detectado, adicionando bot...');
             await addBotPlayer();
+            
+            // Aguardar um momento e recarregar dados da sala
+            console.log('🔄 Recarregando dados da sala após adicionar bot...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const roomSnapshot = await dbRef.room(roomId).once('value');
+            roomData = roomSnapshot.val();
+            console.log('✅ Dados da sala recarregados');
         } else {
             console.log('ℹ️ Bot não necessário:', {
                 reason: playerCount > 1 ? 'Mais de 1 jogador' : 'Não é host'
             });
         }
 
-        // Inicializar jogo se for host e sala estiver cheia (ou com bot)
-        if (roomData.host === currentUser.uid && (roomData.status === 'full' || playerCount >= 2)) {
+        // Recalcular contagem de jogadores após possível adição do bot
+        const currentPlayerCount = Object.keys(roomData.players || {}).length;
+        console.log('👥 Contagem atual de jogadores:', currentPlayerCount);
+
+        // Inicializar jogo se for host e tiver 2 jogadores
+        if (roomData.host === currentUser.uid && currentPlayerCount >= 2) {
+            console.log('🎮 Iniciando jogo como host...');
             await initializeGameState();
+        } else {
+            console.log('⏳ Aguardando inicialização do jogo:', {
+                isHost: roomData.host === currentUser.uid,
+                playerCount: currentPlayerCount
+            });
         }
 
         // Configurar event listeners
@@ -240,21 +257,44 @@ function setupGameListeners() {
  * Inicializar estado do jogo
  */
 async function initializeGameState() {
+    console.log('🎮 Iniciando estado do jogo...');
+    
     try {
+        console.log('📊 Dados da sala:', {
+            roomData,
+            players: roomData?.players
+        });
+        
         const playerIds = Object.keys(roomData.players);
+        console.log('👥 IDs dos jogadores:', playerIds);
+        
+        if (playerIds.length < 2) {
+            console.error('❌ Menos de 2 jogadores na sala!');
+            return;
+        }
+        
         const player1Id = playerIds[0];
         const player2Id = playerIds[1];
         
         const player1Style = roomData.players[player1Id].style;
         const player2Style = roomData.players[player2Id].style;
+        
+        console.log('🎨 Estilos dos jogadores:', {
+            player1: player1Style,
+            player2: player2Style
+        });
 
         // Gerar cartas com estilos de cada jogador (10 cartas de cada = 20 total)
+        console.log('🃏 Gerando cartas...');
         const cards = generateCardsWithOwnership(player1Style, player2Style, 10);
+        console.log('✅ Cartas geradas:', cards.length);
 
         // Definir primeiro jogador aleatoriamente
         const firstPlayer = playerIds[Math.floor(Math.random() * playerIds.length)];
+        console.log('🎲 Primeiro jogador:', firstPlayer);
 
         // Criar pilhas iniciais para cada jogador (distribuir cartas aleatoriamente)
+        console.log('🔀 Embaralhando cartas...');
         const shuffled = shuffleArray(cards);
         const halfPoint = Math.floor(shuffled.length / 2);
         
@@ -269,6 +309,11 @@ async function initializeGameState() {
             dono_atual: player2Id,
             posicao_pilha: index
         }));
+
+        console.log('📚 Pilhas criadas:', {
+            player1Pile: player1Pile.length,
+            player2Pile: player2Pile.length
+        });
 
         const gameState = {
             status: 'playing',
@@ -288,11 +333,13 @@ async function initializeGameState() {
             turnStartTime: firebase.database.ServerValue.TIMESTAMP
         };
 
+        console.log('💾 Salvando estado no Firebase...');
         await dbRef.room(roomId).child('gameState').set(gameState);
 
-        console.log('✅ Estado do jogo inicializado');
+        console.log('✅ Estado do jogo inicializado com sucesso!');
     } catch (error) {
         console.error('❌ Erro ao inicializar estado:', error);
+        console.error('Stack trace:', error.stack);
     }
 }
 
