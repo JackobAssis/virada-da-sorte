@@ -1,0 +1,24 @@
+{
+  "name": "virada-da-sorte",
+  "version": "1.0.0",
+  "description": "Jogo de cartas multiplayer online com estilos customizáveis",
+  "main": "public/index.html",
+  "scripts": {
+    "serve": "firebase serve",
+    "deploy": "firebase deploy",
+    "dev": "http-server public -p 8080 -o"
+  },
+  "keywords": [
+    "game",
+    "multiplayer",
+    "cards",
+    "firebase",
+    "realtime"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "firebase-tools": "^13.0.0",
+    "http-server": "^14.1.1"
+  }
+}

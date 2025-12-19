@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virada da Sorte - Lobby</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/cards.css">
+    <link rel="stylesheet" href="css/cards-free-styles.css">
+    <link rel="stylesheet" href="css/styles-premium.css">
+</head>
+<body class="lobby-page">
+    <div class="container">
+        <header class="lobby-header">
+            <h1>🎴 VIRADA DA SORTE</h1>
+            <div class="user-info">
+                <span id="userName">Jogador</span>
+                <button id="logoutBtn" class="btn btn-secondary">Sair</button>
+            </div>
+        </header>
+
+        <div class="lobby-content">
+            <!-- Seção de Estilos -->
+            <section class="styles-section">
+                <h2>Escolha seu Estilo de Cartas</h2>
+                <div id="stylesGrid" class="styles-grid">
+                    <!-- Estilos serão carregados dinamicamente -->
+                </div>
+            </section>
+
+            <!-- Seção de Salas -->
+            <section class="rooms-section">
+                <h2>Salas de Jogo</h2>
+                <div class="room-actions">
+                    <button id="createRoomBtn" class="btn btn-primary">Criar Sala</button>
+                    <button id="refreshRoomsBtn" class="btn btn-secondary">Atualizar</button>
+                </div>
+                <div id="roomsList" class="rooms-list">
+                    <!-- Salas serão carregadas dinamicamente -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Modal de Criação de Sala -->
+        <div id="createRoomModal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Criar Nova Sala</h3>
+                <input type="text" id="roomName" placeholder="Nome da sala" maxlength="20">
+                <div class="modal-actions">
+                    <button id="confirmCreateRoom" class="btn btn-primary">Criar</button>
+                    <button id="cancelCreateRoom" class="btn btn-secondary">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Preview de Estilo -->
+        <div id="stylePreviewModal" class="modal hidden">
+            <div class="modal-content style-preview">
+                <h3 id="stylePreviewName">Estilo</h3>
+                <div class="preview-card-container">
+                    <div id="previewCard" class="card">
+                        <div class="card-inner">
+                            <div class="card-back"></div>
+                            <div class="card-front"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button id="selectStyleBtn" class="btn btn-primary">Selecionar</button>
+                    <button id="closePreviewBtn" class="btn btn-secondary">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <!-- Scripts -->
+    <script src="js/firebase.js"></script>
+    <script src="js/styles.js"></script>
+    <script src="js/lobby.js"></script>
+</body>
+</html>

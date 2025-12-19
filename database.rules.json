@@ -1,0 +1,105 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid",
+        ".validate": "newData.hasChildren(['uid', 'displayName', 'email'])",
+        "uid": {
+          ".validate": "newData.val() === $uid"
+        },
+        "displayName": {
+          ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 30"
+        },
+        "email": {
+          ".validate": "newData.isString()"
+        },
+        "selectedStyle": {
+          ".validate": "newData.isString()"
+        },
+        "unlockedStyles": {
+          ".validate": "newData.hasChildren()"
+        },
+        "stats": {
+          "gamesPlayed": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "gamesWon": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "gamesLost": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          }
+        }
+      }
+    },
+    "rooms": {
+      ".read": "auth != null",
+      "$roomId": {
+        ".write": "auth != null && (
+          !data.exists() || 
+          data.child('host').val() === auth.uid || 
+          data.child('players').child(auth.uid).exists()
+        )",
+        ".validate": "newData.hasChildren(['id', 'name', 'host', 'status', 'players'])",
+        "id": {
+          ".validate": "newData.val() === $roomId"
+        },
+        "name": {
+          ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20"
+        },
+        "host": {
+          ".validate": "newData.isString()"
+        },
+        "status": {
+          ".validate": "newData.isString() && (
+            newData.val() === 'waiting' || 
+            newData.val() === 'full' || 
+            newData.val() === 'playing' || 
+            newData.val() === 'finished'
+          )"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber() || newData.val() === null"
+        },
+        "players": {
+          "$playerId": {
+            ".validate": "newData.hasChildren(['uid', 'name'])",
+            "uid": {
+              ".validate": "newData.val() === $playerId"
+            },
+            "name": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 30"
+            },
+            "style": {
+              ".validate": "newData.isString()"
+            },
+            "score": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
+            "ready": {
+              ".validate": "newData.isBoolean()"
+            }
+          }
+        },
+        "gameState": {
+          "cards": {
+            ".validate": "newData.hasChildren()"
+          },
+          "currentTurn": {
+            ".validate": "newData.isString() || newData.val() === null"
+          },
+          "flippedCards": {
+            ".validate": "newData.hasChildren() || newData.val() === null"
+          },
+          "matchedPairs": {
+            ".validate": "newData.hasChildren() || newData.val() === null"
+          },
+          "lastAction": {
+            ".validate": "newData.isNumber() || newData.val() === null"
+          }
+        }
+      }
+    }
+  }
+}

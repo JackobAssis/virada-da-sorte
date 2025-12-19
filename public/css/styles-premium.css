@@ -1,0 +1,288 @@
+/**
+ * ESTILOS PREMIUM - Baseados em pacotes de imagens
+ * 
+ * Estes estilos usam imagens como background
+ * As imagens são aplicadas via JavaScript
+ * O CSS define apenas a estrutura e animações adicionais
+ */
+
+/* ========================================
+   ESTILO PREMIUM: COSMOS
+   ======================================== */
+
+.card.style-premium-cosmos .card-back,
+.card.style-premium-cosmos .card-front {
+    /* Imagem aplicada via JS: background-image: url('packs/cosmos/XX.png') */
+    background-size: cover;
+    background-position: center;
+    border: 2px solid rgba(138, 43, 226, 0.6);
+    box-shadow: 
+        0 0 20px rgba(138, 43, 226, 0.4),
+        0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.card.style-premium-cosmos .card-back::before {
+    content: none; /* Remove emoji padrão */
+}
+
+/* Overlay escuro para melhorar legibilidade */
+.card.style-premium-cosmos .card-front::before {
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(0, 0, 0, 0.3) 100%
+    );
+}
+
+/* ========================================
+   ESTILO PREMIUM: NATURE
+   ======================================== */
+
+.card.style-premium-nature .card-back,
+.card.style-premium-nature .card-front {
+    background-size: cover;
+    background-position: center;
+    border: 2px solid rgba(34, 139, 34, 0.6);
+    box-shadow: 
+        0 0 20px rgba(34, 139, 34, 0.4),
+        0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.card.style-premium-nature .card-back::before {
+    content: none;
+}
+
+.card.style-premium-nature .card-front::before {
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(0, 50, 0, 0.3) 100%
+    );
+}
+
+/* ========================================
+   ESTILO PREMIUM: FANTASY
+   ======================================== */
+
+.card.style-premium-fantasy .card-back,
+.card.style-premium-fantasy .card-front {
+    background-size: cover;
+    background-position: center;
+    border: 2px solid rgba(218, 165, 32, 0.6);
+    box-shadow: 
+        0 0 20px rgba(218, 165, 32, 0.4),
+        0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.card.style-premium-fantasy .card-back::before {
+    content: none;
+}
+
+.card.style-premium-fantasy .card-front::before {
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(50, 25, 0, 0.3) 100%
+    );
+}
+
+/* ========================================
+   ESTILO PREMIUM: CYBERPUNK
+   ======================================== */
+
+.card.style-premium-cyberpunk .card-back,
+.card.style-premium-cyberpunk .card-front {
+    background-size: cover;
+    background-position: center;
+    border: 2px solid rgba(255, 0, 255, 0.6);
+    box-shadow: 
+        0 0 20px rgba(255, 0, 255, 0.4),
+        0 0 40px rgba(0, 255, 255, 0.2),
+        0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.card.style-premium-cyberpunk .card-back::before {
+    content: none;
+}
+
+.card.style-premium-cyberpunk .card-front::before {
+    background: linear-gradient(
+        135deg,
+        rgba(255, 0, 255, 0.2) 0%,
+        rgba(0, 255, 255, 0.2) 100%
+    );
+}
+
+/* Efeito glitch para cyberpunk */
+.card.style-premium-cyberpunk:hover .card-back::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        to right,
+        rgba(255, 0, 255, 0.1),
+        transparent,
+        rgba(0, 255, 255, 0.1)
+    );
+    animation: glitch 0.3s infinite;
+}
+
+@keyframes glitch {
+    0% {
+        transform: translateX(0);
+    }
+    20% {
+        transform: translateX(-2px);
+    }
+    40% {
+        transform: translateX(2px);
+    }
+    60% {
+        transform: translateX(-2px);
+    }
+    80% {
+        transform: translateX(2px);
+    }
+    100% {
+        transform: translateX(0);
+    }
+}
+
+/* ========================================
+   ESTILO PREMIUM: OCEAN
+   ======================================== */
+
+.card.style-premium-ocean .card-back,
+.card.style-premium-ocean .card-front {
+    background-size: cover;
+    background-position: center;
+    border: 2px solid rgba(0, 119, 182, 0.6);
+    box-shadow: 
+        0 0 20px rgba(0, 119, 182, 0.4),
+        0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.card.style-premium-ocean .card-back::before {
+    content: none;
+}
+
+.card.style-premium-ocean .card-front::before {
+    background: linear-gradient(
+        to bottom,
+        rgba(0, 50, 100, 0.2) 0%,
+        rgba(0, 100, 150, 0.3) 100%
+    );
+}
+
+/* Efeito de ondas */
+.card.style-premium-ocean .card-back::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(255, 255, 255, 0.1) 50%,
+        transparent 100%
+    );
+    animation: oceanWave 3s ease-in-out infinite;
+}
+
+@keyframes oceanWave {
+    0%, 100% {
+        transform: translateY(-100%);
+    }
+    50% {
+        transform: translateY(100%);
+    }
+}
+
+/* ========================================
+   ESTRUTURA COMUM PARA PREMIUM
+   ======================================== */
+
+/* Todos os cards premium recebem tratamento especial */
+.card[class*="style-premium"] {
+    position: relative;
+}
+
+/* Borda animada para premium */
+.card[class*="style-premium"]::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(
+        45deg,
+        transparent 30%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 70%
+    );
+    border-radius: 14px;
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.card[class*="style-premium"]:hover::after {
+    opacity: 1;
+    animation: premiumBorderSweep 2s linear infinite;
+}
+
+@keyframes premiumBorderSweep {
+    0% {
+        background-position: -200% center;
+    }
+    100% {
+        background-position: 200% center;
+    }
+}
+
+/* ========================================
+   BADGE DE PREMIUM
+   ======================================== */
+
+/* Indicador visual de que é um card premium */
+.card[class*="style-premium"] .card-back::after {
+    content: '⭐';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 1.2rem;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+    z-index: 10;
+    animation: premiumBadgePulse 2s ease-in-out infinite;
+}
+
+@keyframes premiumBadgePulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+}
+
+/* ========================================
+   OTIMIZAÇÃO PARA PERFORMANCE
+   ======================================== */
+
+/* Usar will-change para animações suaves */
+.card[class*="style-premium"] {
+    will-change: transform;
+}
+
+.card[class*="style-premium"] .card-back,
+.card[class*="style-premium"] .card-front {
+    will-change: transform, opacity;
+}

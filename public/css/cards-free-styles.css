@@ -1,0 +1,448 @@
+/**
+ * CARDS FREE STYLES - Estilos Gratuitos de Alta Qualidade
+ * 
+ * 4 estilos visuais criados exclusivamente com HTML e CSS
+ * Sem uso de imagens externas
+ * Cada estilo mantém a mesma estrutura, tamanho e animações
+ */
+
+/* ========================================
+   PADRÃO GLOBAL (Aplicado a todos)
+   ======================================== */
+
+.card {
+    width: 96px;
+    height: 136px;
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.card-front,
+.card-back {
+    border-radius: 12px;
+}
+
+/* ========================================
+   ESTILO 01 — NEON CIRCUIT
+   Futurista | Tecnológico | Cyberpunk
+   ======================================== */
+
+.card.style-neon-circuit .card-back {
+    /* Fundo com gradiente radial escuro */
+    background: radial-gradient(
+        circle at 30% 40%,
+        #0a2e2e 0%,
+        #020b0f 70%
+    );
+    border: 1px solid rgba(0, 255, 156, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Linhas de circuito (diagonal) */
+.card.style-neon-circuit .card-back::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 10px,
+        rgba(0, 255, 156, 0.05) 10px,
+        rgba(0, 255, 156, 0.05) 12px
+    );
+    animation: neonCircuitMove 20s linear infinite;
+}
+
+/* Glow neon pulsante */
+.card.style-neon-circuit .card-back::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    background: radial-gradient(
+        circle,
+        rgba(0, 255, 156, 0.3) 0%,
+        transparent 70%
+    );
+    animation: neonPulseGlow 2s ease-in-out infinite;
+}
+
+/* Borda com brilho tecnológico */
+.card.style-neon-circuit .card-back {
+    box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.35),
+        inset 0 0 15px rgba(0, 255, 156, 0.1),
+        0 0 15px rgba(0, 207, 255, 0.2);
+}
+
+/* Card front com tema neon */
+.card.style-neon-circuit .card-front {
+    background: radial-gradient(
+        circle at 50% 50%,
+        #00cfff 0%,
+        #00ff9c 50%,
+        #020b0f 100%
+    );
+    border: 1px solid #00ff9c;
+    box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.35),
+        0 0 20px rgba(0, 255, 156, 0.4);
+}
+
+/* Animações do Neon Circuit */
+@keyframes neonCircuitMove {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    100% { transform: translate(50px, 50px) rotate(360deg); }
+}
+
+@keyframes neonPulseGlow {
+    0%, 100% {
+        opacity: 0.5;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.3);
+    }
+}
+
+/* ========================================
+   ESTILO 02 — ARCANE SIGIL
+   Místico | Arcano | Mágico
+   ======================================== */
+
+.card.style-arcane-sigil .card-back {
+    /* Fundo com textura mágica */
+    background: 
+        radial-gradient(
+            circle at 20% 80%,
+            rgba(181, 124, 255, 0.15) 0%,
+            transparent 50%
+        ),
+        radial-gradient(
+            circle at 80% 20%,
+            rgba(212, 175, 55, 0.1) 0%,
+            transparent 50%
+        ),
+        linear-gradient(135deg, #2b0a3d 0%, #1a0526 100%);
+    border: 1px solid rgba(181, 124, 255, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Símbolo central geométrico (feito com gradiente cônico) */
+.card.style-arcane-sigil .card-back::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 50px;
+    height: 50px;
+    background: conic-gradient(
+        from 0deg at 50% 50%,
+        transparent 0deg,
+        rgba(181, 124, 255, 0.2) 60deg,
+        transparent 120deg,
+        rgba(212, 175, 55, 0.15) 180deg,
+        transparent 240deg,
+        rgba(181, 124, 255, 0.2) 300deg,
+        transparent 360deg
+    );
+    border-radius: 50%;
+    animation: arcaneRotate 8s linear infinite;
+}
+
+/* Aura mágica ao redor */
+.card.style-arcane-sigil .card-back::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 70px;
+    height: 70px;
+    background: radial-gradient(
+        circle,
+        rgba(181, 124, 255, 0.15) 0%,
+        rgba(181, 124, 255, 0.05) 40%,
+        transparent 70%
+    );
+    border-radius: 50%;
+    animation: arcaneAuraPulse 3s ease-in-out infinite;
+}
+
+/* Borda com relevo arcano */
+.card.style-arcane-sigil .card-back {
+    box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.35),
+        inset 0 0 20px rgba(181, 124, 255, 0.1),
+        inset 0 2px 4px rgba(212, 175, 55, 0.1);
+}
+
+/* Card front místico */
+.card.style-arcane-sigil .card-front {
+    background: 
+        radial-gradient(
+            circle at 50% 50%,
+            #b57cff 0%,
+            #6b2fb5 50%,
+            #2b0a3d 100%
+        );
+    border: 1px solid #d4af37;
+    box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.35),
+        0 0 20px rgba(181, 124, 255, 0.3);
+}
+
+/* Animações do Arcane Sigil */
+@keyframes arcaneRotate {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes arcaneAuraPulse {
+    0%, 100% {
+        opacity: 0.6;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.2);
+    }
+}
+
+/* ========================================
+   ESTILO 03 — MINIMAL PRIME
+   Minimalista | Limpo | Elegante
+   ======================================== */
+
+.card.style-minimal-prime .card-back {
+    /* Fundo sólido clean */
+    background-color: #eaeaea;
+    border: 1px solid #8a8a8a;
+    position: relative;
+}
+
+/* Detalhe geométrico sutil */
+.card.style-minimal-prime .card-back::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 30px;
+    height: 30px;
+    border: 2px solid rgba(17, 17, 17, 0.1);
+    border-radius: 50%;
+}
+
+/* Segundo círculo concêntrico */
+.card.style-minimal-prime .card-back::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    background-color: rgba(138, 138, 138, 0.15);
+    border-radius: 50%;
+}
+
+/* Sombra leve e discreta */
+.card.style-minimal-prime .card-back {
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Card front minimal */
+.card.style-minimal-prime .card-front {
+    background-color: #ffffff;
+    border: 1px solid #111111;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Contraste para símbolos no front */
+.card.style-minimal-prime .card-front::after {
+    color: #111111;
+    filter: none;
+    text-shadow: none;
+}
+
+/* ========================================
+   ESTILO 04 — FLUX EMBER
+   Energético | Abstrato | Intenso
+   ======================================== */
+
+.card.style-flux-ember .card-back {
+    /* Gradientes angulares e assimétricos */
+    background: 
+        linear-gradient(
+            27deg,
+            #ff3b3b 0%,
+            #ff9f1c 40%,
+            #0a0a0a 100%
+        ),
+        linear-gradient(
+            -63deg,
+            rgba(255, 59, 59, 0.3) 0%,
+            transparent 50%
+        );
+    background-blend-mode: screen, normal;
+    border: 1px solid rgba(255, 159, 28, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Padrões abstratos orgânicos (camada 1) */
+.card.style-flux-ember .card-back::before {
+    content: '';
+    position: absolute;
+    top: -30%;
+    right: -30%;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(
+        circle,
+        rgba(255, 159, 28, 0.4) 0%,
+        rgba(255, 59, 59, 0.2) 40%,
+        transparent 70%
+    );
+    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+    animation: fluxEmberMove1 6s ease-in-out infinite alternate;
+}
+
+/* Padrões abstratos orgânicos (camada 2) */
+.card.style-flux-ember .card-back::after {
+    content: '';
+    position: absolute;
+    bottom: -20%;
+    left: -20%;
+    width: 80px;
+    height: 80px;
+    background: radial-gradient(
+        circle,
+        rgba(255, 59, 59, 0.3) 0%,
+        rgba(255, 159, 28, 0.15) 50%,
+        transparent 70%
+    );
+    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+    animation: fluxEmberMove2 7s ease-in-out infinite alternate-reverse;
+    mix-blend-mode: screen;
+}
+
+/* Glow quente sutil */
+.card.style-flux-ember .card-back {
+    box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.35),
+        inset 0 0 30px rgba(255, 59, 59, 0.1),
+        0 0 20px rgba(255, 159, 28, 0.2);
+}
+
+/* Card front energético */
+.card.style-flux-ember .card-front {
+    background: 
+        linear-gradient(
+            135deg,
+            #ff9f1c 0%,
+            #ff3b3b 50%,
+            #0a0a0a 100%
+        );
+    border: 1px solid #ff3b3b;
+    box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.35),
+        0 0 25px rgba(255, 59, 59, 0.4);
+}
+
+/* Animações do Flux Ember */
+@keyframes fluxEmberMove1 {
+    0% {
+        transform: translate(0, 0) rotate(0deg);
+        border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+    }
+    50% {
+        border-radius: 60% 40% 30% 70% / 50% 60% 30% 60%;
+    }
+    100% {
+        transform: translate(-20px, 20px) rotate(180deg);
+        border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+    }
+}
+
+@keyframes fluxEmberMove2 {
+    0% {
+        transform: translate(0, 0) rotate(0deg) scale(1);
+        border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+    }
+    50% {
+        border-radius: 30% 70% 60% 40% / 50% 60% 40% 50%;
+    }
+    100% {
+        transform: translate(15px, -15px) rotate(-180deg) scale(1.1);
+        border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+    }
+}
+
+/* ========================================
+   OTIMIZAÇÃO PARA PERFORMANCE
+   ======================================== */
+
+/* Usar will-change para animações suaves */
+.card.style-neon-circuit .card-back::before,
+.card.style-neon-circuit .card-back::after,
+.card.style-arcane-sigil .card-back::before,
+.card.style-arcane-sigil .card-back::after,
+.card.style-flux-ember .card-back::before,
+.card.style-flux-ember .card-back::after {
+    will-change: transform, opacity;
+}
+
+/* ========================================
+   RESPONSIVE (Mantém proporções)
+   ======================================== */
+
+@media (max-width: 768px) {
+    /* Cards mantém o tamanho mas ajustam elementos internos */
+    .card.style-neon-circuit .card-back::after {
+        width: 30px;
+        height: 30px;
+    }
+    
+    .card.style-arcane-sigil .card-back::before {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .card.style-flux-ember .card-back::before {
+        width: 80px;
+        height: 80px;
+    }
+}
+
+/* ========================================
+   ACESSIBILIDADE
+   ======================================== */
+
+/* Reduzir animações se usuário preferir */
+@media (prefers-reduced-motion: reduce) {
+    .card.style-neon-circuit .card-back::before,
+    .card.style-arcane-sigil .card-back::before,
+    .card.style-flux-ember .card-back::before,
+    .card.style-flux-ember .card-back::after {
+        animation: none;
+    }
+    
+    .card.style-neon-circuit .card-back::after,
+    .card.style-arcane-sigil .card-back::after {
+        animation: none;
+        opacity: 0.7;
+    }
+}

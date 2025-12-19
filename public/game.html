@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virada da Sorte - Jogo</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/cards.css">
+    <link rel="stylesheet" href="css/cards-free-styles.css">
+    <link rel="stylesheet" href="css/styles-premium.css">
+</head>
+<body class="game-page">
+    <div class="container">
+        <header class="game-header">
+            <button id="leaveGameBtn" class="btn btn-secondary">Sair da Sala</button>
+            <h2 id="roomNameDisplay">Sala</h2>
+            <div id="turnIndicator" class="turn-indicator">Aguardando...</div>
+        </header>
+
+        <!-- Área de Jogadores -->
+        <div class="players-area">
+            <div id="player1Info" class="player-info">
+                <span class="player-name">Jogador 1</span>
+                <span class="player-score">Pontos: 0</span>
+            </div>
+            <div id="player2Info" class="player-info">
+                <span class="player-name">Aguardando...</span>
+                <span class="player-score">Pontos: 0</span>
+            </div>
+        </div>
+
+        <!-- Tabuleiro de Jogo -->
+        <div id="gameBoard" class="game-board">
+            <!-- Cards serão gerados dinamicamente -->
+        </div>
+
+        <!-- Mensagem de Status -->
+        <div id="gameMessage" class="game-message hidden"></div>
+
+        <!-- Modal de Fim de Jogo -->
+        <div id="gameOverModal" class="modal hidden">
+            <div class="modal-content">
+                <h2 id="gameOverTitle">Fim de Jogo!</h2>
+                <p id="gameOverMessage"></p>
+                <div class="final-scores">
+                    <div id="finalScore1"></div>
+                    <div id="finalScore2"></div>
+                </div>
+                <div class="modal-actions">
+                    <button id="returnToLobby" class="btn btn-primary">Voltar ao Lobby</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <!-- Scripts -->
+    <script src="js/firebase.js"></script>
+    <script src="js/styles.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>
