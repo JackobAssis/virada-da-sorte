@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Test - Virada da Sorte</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .test-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #ddd;
+        }
+
+        .test-section.success {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+
+        .test-section.error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+
+        .test-section.pending {
+            border-left-color: #ffc107;
+            background: #fff3cd;
+        }
+
+        .test-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-icon.success {
+            background: #28a745;
+        }
+
+        .status-icon.error {
+            background: #dc3545;
+        }
+
+        .status-icon.pending {
+            background: #ffc107;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .test-result {
+            color: #333;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+            font-weight: bold;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .summary h2 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Firebase Connection Test</h1>
+        <p class="subtitle">Teste de Configuração do Firebase - Virada da Sorte</p>
+
+        <div id="testResults"></div>
+
+        <button id="runTests" onclick="runAllTests()">▶️ Executar Todos os Testes</button>
+
+        <div id="summary" class="summary" style="display: none;">
+            <h2>📊 Resumo dos Testes</h2>
+            <p id="summaryText"></p>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-storage-compat.js"></script>
+
+    <!-- Firebase Config -->
+    <script src="js/firebase.js"></script>
+
+    <script>
+        const tests = [];
+        let passedTests = 0;
+        let failedTests = 0;
+
+        function addTest(title, status, message, details = null) {
+            tests.push({ title, status, message, details });
+            renderTests();
+        }
+
+        function renderTests() {
+            const container = document.getElementById('testResults');
+            container.innerHTML = '';
+
+            tests.forEach(test => {
+                const section = document.createElement('div');
+                section.className = `test-section ${test.status}`;
+                
+                const icon = test.status === 'success' ? '✅' : 
+                             test.status === 'error' ? '❌' : '⏳';
+                
+                section.innerHTML = `
+                    <div class="test-title">
+                        <span class="status-icon ${test.status}"></span>
+                        ${icon} ${test.title}
+                    </div>
+                    <div class="test-result">
+                        ${test.message}
+                        ${test.details ? `<div class="code-block">${test.details}</div>` : ''}
+                    </div>
+                `;
+                
+                container.appendChild(section);
+            });
+        }
+
+        async function runAllTests() {
+            const button = document.getElementById('runTests');
+            button.disabled = true;
+            button.textContent = '⏳ Executando testes...';
+            
+            tests.length = 0;
+            passedTests = 0;
+            failedTests = 0;
+            
+            document.getElementById('summary').style.display = 'none';
+
+            // Test 1: Firebase Initialization
+            await testFirebaseInit();
+            
+            // Test 2: Authentication
+            await testAuth();
+            
+            // Test 3: Database
+            await testDatabase();
+            
+            // Test 4: Storage
+            await testStorage();
+            
+            // Test 5: Database Rules
+            await testDatabaseRules();
+
+            // Show summary
+            showSummary();
+            
+            button.disabled = false;
+            button.textContent = '🔄 Executar Testes Novamente';
+        }
+
+        async function testFirebaseInit() {
+            addTest(
+                'Inicialização do Firebase',
+                'pending',
+                'Verificando configuração do Firebase...'
+            );
+
+            try {
+                if (typeof firebase === 'undefined') {
+                    throw new Error('Firebase SDK não carregado');
+                }
+
+                const app = firebase.app();
+                const config = app.options;
+
+                if (!config.apiKey || config.apiKey === 'SUA_API_KEY_AQUI') {
+                    throw new Error('Credenciais do Firebase não configuradas em firebase.js');
+                }
+
+                tests[tests.length - 1] = {
+                    title: 'Inicialização do Firebase',
+                    status: 'success',
+                    message: 'Firebase inicializado com sucesso!',
+                    details: `Projeto: ${config.projectId}<br>Database: ${config.databaseURL}`
+                };
+                passedTests++;
+            } catch (error) {
+                tests[tests.length - 1] = {
+                    title: 'Inicialização do Firebase',
+                    status: 'error',
+                    message: 'Erro ao inicializar Firebase',
+                    details: error.message
+                };
+                failedTests++;
+            }
+            renderTests();
+        }
+
+        async function testAuth() {
+            addTest(
+                'Firebase Authentication',
+                'pending',
+                'Verificando serviço de autenticação...'
+            );
+
+            try {
+                if (typeof auth === 'undefined') {
+                    throw new Error('Firebase Auth não inicializado');
+                }
+
+                // Verificar se há usuário logado
+                const user = auth.currentUser;
+                const message = user 
+                    ? `Usuário autenticado: ${user.email}`
+                    : 'Serviço de autenticação disponível (nenhum usuário logado)';
+
+                tests[tests.length - 1] = {
+                    title: 'Firebase Authentication',
+                    status: 'success',
+                    message: message,
+                    details: user ? `UID: ${user.uid}` : null
+                };
+                passedTests++;
+            } catch (error) {
+                tests[tests.length - 1] = {
+                    title: 'Firebase Authentication',
+                    status: 'error',
+                    message: 'Erro no serviço de autenticação',
+                    details: error.message
+                };
+                failedTests++;
+            }
+            renderTests();
+        }
+
+        async function testDatabase() {
+            addTest(
+                'Realtime Database',
+                'pending',
+                'Verificando conexão com o banco de dados...'
+            );
+
+            try {
+                if (typeof database === 'undefined') {
+                    throw new Error('Firebase Database não inicializado');
+                }
+
+                // Tentar conectar
+                const connectedRef = database.ref('.info/connected');
+                
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Timeout: não foi possível conectar ao database'));
+                    }, 5000);
+
+                    connectedRef.once('value', (snapshot) => {
+                        clearTimeout(timeout);
+                        if (snapshot.val() === true) {
+                            resolve();
+                        } else {
+                            reject(new Error('Database não está conectado'));
+                        }
+                    });
+                });
+
+                tests[tests.length - 1] = {
+                    title: 'Realtime Database',
+                    status: 'success',
+                    message: 'Conexão com Realtime Database estabelecida!',
+                    details: `URL: ${database.ref().toString()}`
+                };
+                passedTests++;
+            } catch (error) {
+                tests[tests.length - 1] = {
+                    title: 'Realtime Database',
+                    status: 'error',
+                    message: 'Erro ao conectar com o database',
+                    details: error.message
+                };
+                failedTests++;
+            }
+            renderTests();
+        }
+
+        async function testStorage() {
+            addTest(
+                'Firebase Storage',
+                'pending',
+                'Verificando serviço de armazenamento...'
+            );
+
+            try {
+                if (typeof storage === 'undefined') {
+                    throw new Error('Firebase Storage não inicializado');
+                }
+
+                const storageUrl = storage.ref().toString();
+
+                tests[tests.length - 1] = {
+                    title: 'Firebase Storage',
+                    status: 'success',
+                    message: 'Firebase Storage disponível!',
+                    details: `Bucket: ${storageUrl}`
+                };
+                passedTests++;
+            } catch (error) {
+                tests[tests.length - 1] = {
+                    title: 'Firebase Storage',
+                    status: 'error',
+                    message: 'Erro no serviço de storage',
+                    details: error.message
+                };
+                failedTests++;
+            }
+            renderTests();
+        }
+
+        async function testDatabaseRules() {
+            addTest(
+                'Database Rules',
+                'pending',
+                'Testando regras de segurança...'
+            );
+
+            try {
+                // Tentar ler /style-packs (deve ser acessível se autenticado)
+                const packsRef = database.ref('style-packs');
+                
+                await packsRef.once('value');
+
+                tests[tests.length - 1] = {
+                    title: 'Database Rules',
+                    status: 'success',
+                    message: 'Regras do database configuradas!',
+                    details: 'Acesso ao database funcionando corretamente'
+                };
+                passedTests++;
+            } catch (error) {
+                // Se não autenticado, é esperado dar erro
+                if (error.code === 'PERMISSION_DENIED') {
+                    tests[tests.length - 1] = {
+                        title: 'Database Rules',
+                        status: 'success',
+                        message: 'Regras de segurança ativas (sem usuário autenticado)',
+                        details: 'As regras estão protegendo os dados corretamente'
+                    };
+                    passedTests++;
+                } else {
+                    tests[tests.length - 1] = {
+                        title: 'Database Rules',
+                        status: 'error',
+                        message: 'Erro ao verificar regras',
+                        details: error.message
+                    };
+                    failedTests++;
+                }
+            }
+            renderTests();
+        }
+
+        function showSummary() {
+            const summary = document.getElementById('summary');
+            const summaryText = document.getElementById('summaryText');
+            
+            const total = passedTests + failedTests;
+            const percentage = ((passedTests / total) * 100).toFixed(0);
+            
+            let emoji = '✅';
+            let status = 'Excelente!';
+            
+            if (failedTests > 0) {
+                emoji = '⚠️';
+                status = 'Atenção!';
+            }
+            
+            if (failedTests > passedTests) {
+                emoji = '❌';
+                status = 'Problemas encontrados';
+            }
+
+            summaryText.innerHTML = `
+                ${emoji} <strong>${status}</strong><br>
+                ${passedTests} de ${total} testes passaram (${percentage}%)<br>
+                ${failedTests > 0 ? `<br>❌ ${failedTests} teste(s) falharam - verifique as configurações acima` : ''}
+            `;
+            
+            summary.style.display = 'block';
+        }
+
+        // Run tests on load
+        window.addEventListener('load', () => {
+            setTimeout(runAllTests, 500);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Função auxiliar para verificar se o usuário está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Função para verificar tamanho do arquivo (max 5MB)
+    function isValidSize() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+    
+    // Função para verificar se é uma imagem
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    // Pacotes de estilos (somente leitura pública)
+    // Administradores devem fazer upload via Firebase Console
+    match /style-packs/{styleId}/{allPaths=**} {
+      // Qualquer pessoa pode ler (visualizar as imagens dos pacotes)
+      allow read: if true;
+      
+      // Apenas administradores podem escrever
+      // Configure isso no Firebase Console > Authentication > Claims
+      allow write: if isAuthenticated() 
+                   && request.auth.token.admin == true
+                   && isImage() 
+                   && isValidSize();
+    }
+    
+    // Imagens de perfil dos usuários
+    match /profile-pictures/{userId}/{fileName} {
+      // Qualquer pessoa autenticada pode ver fotos de perfil
+      allow read: if isAuthenticated();
+      
+      // Apenas o próprio usuário pode fazer upload da sua foto
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId
+                   && isImage() 
+                   && isValidSize();
+    }
+    
+    // Screenshots/compartilhamentos de jogo
+    match /game-screenshots/{userId}/{fileName} {
+      // Qualquer pessoa autenticada pode ver
+      allow read: if isAuthenticated();
+      
+      // Apenas o próprio usuário pode fazer upload
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId
+                   && isImage() 
+                   && isValidSize();
+    }
+    
+    // Negar acesso a qualquer outro caminho
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

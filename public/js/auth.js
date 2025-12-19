@@ -65,6 +65,12 @@ loginBtn?.addEventListener('click', async () => {
 
     try {
         const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        
+        // Atualizar último login
+        await dbRef.user(userCredential.user.uid).update({
+            lastLogin: firebase.database.ServerValue.TIMESTAMP
+        });
+        
         console.log('✅ Login realizado:', userCredential.user.email);
         // O redirecionamento será feito pelo onAuthStateChanged
     } catch (error) {
@@ -116,13 +122,19 @@ registerBtn?.addEventListener('click', async () => {
             uid: user.uid,
             displayName: name,
             email: email,
+            photoURL: null,
             createdAt: firebase.database.ServerValue.TIMESTAMP,
+            lastLogin: firebase.database.ServerValue.TIMESTAMP,
             selectedStyle: 'neon-circuit', // Estilo padrão
             unlockedStyles: ['neon-circuit', 'arcane-sigil', 'minimal-prime', 'flux-ember'], // Estilos gratuitos
             stats: {
                 gamesPlayed: 0,
                 gamesWon: 0,
-                gamesLost: 0
+                gamesLost: 0,
+                totalScore: 0,
+                bestScore: 0,
+                winStreak: 0,
+                bestWinStreak: 0
             }
         });
 

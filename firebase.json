@@ -35,5 +35,8 @@
   },
   "database": {
     "rules": "database.rules.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }

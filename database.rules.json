@@ -14,11 +14,34 @@
         "email": {
           ".validate": "newData.isString()"
         },
+        "photoURL": {
+          ".validate": "newData.isString() || newData.val() === null"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "lastLogin": {
+          ".validate": "newData.isNumber() || newData.val() === null"
+        },
         "selectedStyle": {
           ".validate": "newData.isString()"
         },
         "unlockedStyles": {
           ".validate": "newData.hasChildren()"
+        },
+        "purchasedPacks": {
+          "$packId": {
+            ".validate": "newData.hasChildren(['packId', 'purchasedAt', 'price'])",
+            "packId": {
+              ".validate": "newData.isString()"
+            },
+            "purchasedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "price": {
+              ".validate": "newData.isNumber()"
+            }
+          }
         },
         "stats": {
           "gamesPlayed": {
@@ -29,6 +52,68 @@
           },
           "gamesLost": {
             ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "totalScore": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "bestScore": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "winStreak": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "bestWinStreak": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          }
+        }
+      }
+    },
+    "style-packs": {
+      ".read": "auth != null",
+      ".write": "false",
+      "$packId": {
+        ".validate": "newData.hasChildren(['id', 'name', 'description', 'price', 'category', 'styles'])",
+        "id": {
+          ".validate": "newData.val() === $packId"
+        },
+        "name": {
+          ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 50"
+        },
+        "description": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "price": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "category": {
+          ".validate": "newData.isString() && (
+            newData.val() === 'free' ||
+            newData.val() === 'premium' ||
+            newData.val() === 'exclusive' ||
+            newData.val() === 'seasonal'
+          )"
+        },
+        "featured": {
+          ".validate": "newData.isBoolean() || newData.val() === null"
+        },
+        "releaseDate": {
+          ".validate": "newData.isNumber() || newData.val() === null"
+        },
+        "previewImage": {
+          ".validate": "newData.isString() || newData.val() === null"
+        },
+        "styles": {
+          "$styleId": {
+            ".validate": "newData.hasChildren(['id', 'name'])",
+            "id": {
+              ".validate": "newData.isString()"
+            },
+            "name": {
+              ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 30"
+            },
+            "preview": {
+              ".validate": "newData.isString() || newData.val() === null"
+            }
           }
         }
       }
