@@ -1,18 +1,19 @@
 /**
  * Configuração do Firebase
  * 
- * IMPORTANTE: Substitua as credenciais abaixo pelas suas credenciais do Firebase
- * Você pode obter essas informações em: Firebase Console > Project Settings > General > Your apps
+ * Credenciais do projeto: virada-da-sorte
+ * Configurado em: 18 de dezembro de 2025
  */
 
 const firebaseConfig = {
-    apiKey: "SUA_API_KEY_AQUI",
-    authDomain: "seu-projeto.firebaseapp.com",
-    databaseURL: "https://seu-projeto-default-rtdb.firebaseio.com",
-    projectId: "seu-projeto",
-    storageBucket: "seu-projeto.appspot.com",
-    messagingSenderId: "123456789",
-    appId: "1:123456789:web:abcdef123456"
+    apiKey: "AIzaSyCg2uRjKPzMwdxAbYnQJ1tOhFRk5zwcxRM",
+    authDomain: "virada-da-sorte.firebaseapp.com",
+    databaseURL: "https://virada-da-sorte-default-rtdb.firebaseio.com",
+    projectId: "virada-da-sorte",
+    storageBucket: "virada-da-sorte.firebasestorage.app",
+    messagingSenderId: "737424831264",
+    appId: "1:737424831264:web:f3f0e7f7b01c46d1c1dd45",
+    measurementId: "G-QYYQ78PCEC"
 };
 
 // Inicializar Firebase
