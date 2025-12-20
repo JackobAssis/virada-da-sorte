@@ -216,7 +216,7 @@ function handleStyleConfirm() {
 }
 
 /**
- * Renderizar grade de estilos
+ * Renderizar grade de estilos (SIMPLIFICADO)
  */
 function renderStylesGrid() {
     const grid = document.getElementById('stylesGrid');
@@ -231,54 +231,41 @@ function renderStylesGrid() {
         const isSelected = style.id === userSelectedStyle;
 
         const styleItem = document.createElement('div');
-        styleItem.className = 'style-item';
+        styleItem.className = 'style-item-simple';
         if (isSelected) styleItem.classList.add('selected');
         if (!isUnlocked) styleItem.classList.add('locked');
 
-        // Criar mini preview
-        const previewMini = document.createElement('div');
-        previewMini.className = 'preview-mini';
-        
-        // Aplicar estilo ao preview
-        const previewCard = document.createElement('div');
-        previewCard.style.width = '100%';
-        previewCard.style.height = '100%';
-        previewCard.style.borderRadius = '8px';
-        
-        if (style.type === 'free') {
-            // Para estilos gratuitos, aplicar classe CSS
-            previewCard.className = style.className.replace('style-', '');
-            previewCard.style.background = getStylePreviewGradient(style.id);
-        } else {
-            // Para premium, mostrar gradiente genérico
-            previewCard.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-        }
-        
-        previewMini.appendChild(previewCard);
-
-        const styleName = document.createElement('span');
-        styleName.className = 'style-name';
+        // Nome do estilo
+        const styleName = document.createElement('div');
+        styleName.className = 'style-name-simple';
         styleName.textContent = style.name;
 
+        // Badge de tipo (Gratuito/Premium) - pequeno
         const styleType = document.createElement('span');
-        styleType.className = 'style-type';
-        styleType.textContent = style.type === 'free' ? 'Gratuito' : 'Premium';
-
-        styleItem.appendChild(previewMini);
+        styleType.className = 'style-type-badge';
+        styleType.textContent = style.type === 'free' ? 'Gratuito' : '⭐ Premium';
+        
         styleItem.appendChild(styleName);
         styleItem.appendChild(styleType);
 
-        // Badge premium
-        if (style.type === 'premium') {
-            const premiumBadge = document.createElement('div');
-            premiumBadge.className = 'premium-badge';
-            premiumBadge.textContent = '⭐ PREMIUM';
-            styleItem.appendChild(premiumBadge);
-        }
-
         // Click handler
         if (isUnlocked) {
-            styleItem.addEventListener('click', () => showStylePreview(style.id));
+            styleItem.addEventListener('click', () => {
+                // Remover seleção anterior
+                document.querySelectorAll('.style-item-simple').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                
+                // Selecionar este
+                styleItem.classList.add('selected');
+                userSelectedStyle = style.id;
+                
+                // Feedback visual
+                styleItem.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    styleItem.style.transform = '';
+                }, 150);
+            });
         } else {
             styleItem.addEventListener('click', () => {
                 alert(`Este estilo está bloqueado.\nDesbloquear por: $${style.price}`);
@@ -814,6 +801,11 @@ async function confirmRoomPassword() {
  */
 function enterWaitingRoom(roomId) {
     showSection(SECTIONS.WAITING_ROOM);
+    
+    // Configurar desconexão automática
+    const playerRef = dbRef.room(roomId).child('players').child(currentUser.uid);
+    playerRef.onDisconnect().remove();
+    console.log('🔌 Sistema de desconexão automática configurado (lobby)');
 
     // Configurar listener para mudanças na sala
     if (waitingRoomListener) {

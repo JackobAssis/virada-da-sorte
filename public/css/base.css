@@ -374,10 +374,98 @@ input:focus {
 }
 
 .styles-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    max-width: 500px;
+    margin: 0 auto;
 }
+
+/* ========================================
+   ESTILOS SIMPLIFICADOS - LISTA
+   ======================================== */
+
+.style-item-simple {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-light);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border: 2px solid transparent;
+    position: relative;
+}
+
+.style-item-simple:hover {
+    background: var(--bg-lighter);
+    transform: translateX(4px);
+}
+
+.style-item-simple.selected {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.1);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+}
+
+.style-item-simple.selected::before {
+    content: '✓';
+    position: absolute;
+    left: var(--spacing-md);
+    font-size: 1.2rem;
+    color: var(--primary);
+    font-weight: bold;
+}
+
+.style-item-simple.selected .style-name-simple {
+    margin-left: var(--spacing-lg);
+}
+
+.style-item-simple.locked {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.style-item-simple.locked:hover {
+    transform: none;
+}
+
+.style-name-simple {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.style-type-badge {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: var(--bg-dark);
+    padding: 4px 12px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.style-item-simple .style-type-badge {
+    background: var(--bg-dark);
+}
+
+.style-item-simple.selected .style-type-badge {
+    background: var(--primary-dark);
+    color: var(--text-primary);
+}
+
+/* Badge premium especial */
+.style-type-badge:contains("Premium") {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: var(--bg-dark);
+}
+
+/* ========================================
+   ESTILOS ANTIGOS (manter para compatibilidade)
+   ======================================== */
 
 .style-item {
     background: var(--bg-light);

@@ -100,6 +100,33 @@ auth.onAuthStateChanged(async (user) => {
     await initializeGame();
 });
 
+// ========================================
+// SISTEMA DE DESCONEXÃO AUTOMÁTICA
+// ========================================
+
+/**
+ * Configurar desconexão automática (quando fecha aba/navegador)
+ */
+function setupAutoDisconnect() {
+    if (!roomId || !myPlayerId) return;
+    
+    // Firebase onDisconnect - remove jogador automaticamente
+    const playerRef = dbRef.room(roomId).child('players').child(myPlayerId);
+    playerRef.onDisconnect().remove();
+    
+    console.log('🔌 Sistema de desconexão automática configurado');
+    
+    // Listener para beforeunload (quando fecha aba)
+    window.addEventListener('beforeunload', async (e) => {
+        try {
+            // Remover jogador imediatamente
+            await playerRef.remove();
+        } catch (error) {
+            console.error('❌ Erro ao remover jogador:', error);
+        }
+    });
+}
+
 /**
  * Inicializar jogo
  */
@@ -135,6 +162,9 @@ async function initializeGame() {
         // Setup listeners
         setupRoomListener();
         setupGameStateListener();
+        
+        // Configurar desconexão automática
+        setupAutoDisconnect();
 
         // Verificar se já existe gameState
         const gameStateSnapshot = await dbRef.room(roomId).child('gameState').once('value');
@@ -482,6 +512,7 @@ function createCardElement(card, index, playerId, isCollected = false) {
     div.dataset.cardIndex = index;
     div.dataset.playerId = playerId;
     div.dataset.ownerStyle = card.ownerStyle;
+    div.dataset.imagePath = card.imagePath; // ✅ ADICIONADO para flipCardAnimation
     
     if (card.state === CARD_STATES.FACE_UP || card.state === CARD_STATES.RESOLVED) {
         div.classList.add('flipping');
@@ -548,17 +579,23 @@ function createCardElement(card, index, playerId, isCollected = false) {
     const back = document.createElement('div');
     back.className = 'card-back';
 
-    // Frente
+    // Frente (só criar se a carta estiver virada ou coletada)
     const front = document.createElement('div');
     front.className = 'card-front';
     
-    const img = document.createElement('img');
-    img.className = 'card-image';
-    img.src = card.imagePath;
-    img.alt = 'Carta';
-    img.loading = 'lazy';
+    // CORRIGIDO: Só carregar imagem se carta estiver FACE_UP ou RESOLVED
+    const shouldShowImage = card.state === CARD_STATES.FACE_UP || 
+                           card.state === CARD_STATES.RESOLVED || 
+                           isCollected;
     
-    front.appendChild(img);
+    if (shouldShowImage) {
+        const img = document.createElement('img');
+        img.className = 'card-image';
+        img.src = card.imagePath;
+        img.alt = 'Carta';
+        img.loading = 'lazy';
+        front.appendChild(img);
+    }
 
     inner.appendChild(back);
     inner.appendChild(front);
@@ -623,15 +660,33 @@ async function handleCardClick(card, index, playerId, cardElement) {
 /**
  * Animação de virar carta
  */
-function flipCardAnimation(cardId) {
+async function flipCardAnimation(cardId) {
     const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
-    if (cardEl) {
-        cardEl.classList.add('flipping');
+    if (!cardEl) return;
+    
+    // IMPORTANTE: Carregar imagem AGORA, antes de virar
+    const front = cardEl.querySelector('.card-front');
+    
+    if (front && !front.querySelector('img')) {
+        // Buscar dados da carta do dataset
+        const imagePath = cardEl.dataset.imagePath;
         
-        // Adicionar classe de animação extra para destaque
-        cardEl.classList.add('card-flipping-active');
-        setTimeout(() => {
-            cardEl.classList.remove('card-flipping-active');
+        if (imagePath) {
+            const img = document.createElement('img');
+            img.className = 'card-image';
+            img.src = imagePath;
+            img.alt = 'Carta';
+            img.loading = 'eager'; // Carregar imediatamente
+            front.appendChild(img);
+        }
+    }
+    
+    cardEl.classList.add('flipping');
+    
+    // Adicionar classe de animação extra para destaque
+    cardEl.classList.add('card-flipping-active');
+    setTimeout(() => {
+        cardEl.classList.remove('card-flipping-active');
         }, 650);
     }
 }
@@ -1075,9 +1130,37 @@ function handleGameOver(state) {
  */
 async function leaveGame() {
     try {
+        console.log('🚪 Saindo do jogo...');
+        
+        // Remover listeners
         if (roomListener) dbRef.room(roomId).off('value', roomListener);
         if (gameStateListener) dbRef.room(roomId).child('gameState').off('value', gameStateListener);
-
+        
+        // Remover jogador da sala
+        if (roomId && myPlayerId) {
+            await dbRef.room(roomId).child('players').child(myPlayerId).remove();
+            console.log('✅ Jogador removido da sala');
+            
+            // Verificar se sala ficou vazia
+            const roomSnapshot = await dbRef.room(roomId).once('value');
+            const roomData = roomSnapshot.val();
+            
+            if (roomData && roomData.players) {
+                const remainingPlayers = Object.keys(roomData.players).length;
+                
+                if (remainingPlayers === 0) {
+                    // Sala vazia, remover completamente
+                    await dbRef.room(roomId).remove();
+                    console.log('🗑️ Sala vazia removida');
+                } else if (roomData.host === myPlayerId) {
+                    // Se eu era o host, transferir para próximo jogador
+                    const newHost = Object.keys(roomData.players)[0];
+                    await dbRef.room(roomId).update({ host: newHost });
+                    console.log('👑 Host transferido para:', newHost);
+                }
+            }
+        }
+        
         window.location.href = 'lobby.html';
     } catch (error) {
         console.error('❌ Erro ao sair:', error);
