@@ -44,22 +44,14 @@ async function initializeLobby() {
         // Exibir nome do usuário
         document.getElementById('userName').textContent = currentUser.displayName || 'Jogador';
 
-        // Carregar estilos do usuário
-        userUnlockedStyles = await StylesManager.getUserUnlockedStyles(currentUser.uid);
-        
-        // Se não tem estilos, adicionar os gratuitos
-        if (!userUnlockedStyles || userUnlockedStyles.length === 0) {
-            userUnlockedStyles = ['neon-circuit', 'arcane-sigil', 'minimal-prime', 'flux-ember'];
-            await dbRef.user(currentUser.uid).update({
-                unlockedStyles: userUnlockedStyles
-            });
-        }
+        // Todos os 5 estilos com imagens estão sempre desbloqueados
+        userUnlockedStyles = ['personagens', 'animais', 'simbolos', 'cyber', 'dark'];
         
         userSelectedStyle = await StylesManager.getUserSelectedStyle(currentUser.uid);
         
-        // Se estilo selecionado não existe mais, usar o primeiro gratuito
+        // Se estilo selecionado não existe mais, usar o primeiro
         if (!userSelectedStyle || !userUnlockedStyles.includes(userSelectedStyle)) {
-            userSelectedStyle = 'neon-circuit';
+            userSelectedStyle = 'personagens';
             await StylesManager.saveUserSelectedStyle(currentUser.uid, userSelectedStyle);
         }
 

@@ -25,17 +25,6 @@ const STYLE_IMAGES = {
     )
 };
 
-// Mapeamento de estilos antigos para novos
-const STYLE_MAP = {
-    'neon-circuit': 'cyber',
-    'arcane-sigil': 'simbolos',
-    'shadow-realm': 'dark',
-    'celestial-burst': 'personagens',
-    'prism-wave': 'animais',
-    'flux-ember': 'dark',
-    'minimal-prime': 'personagens'
-};
-
 // ========================================
 // ESTADOS DO JOGO
 // ========================================
@@ -151,7 +140,7 @@ async function initializeGame() {
         }
 
         myPlayerId = currentUser.uid;
-        myStyle = convertStyle(roomData.players[myPlayerId].style || 'cyber');
+        myStyle = roomData.players[myPlayerId].style || 'personagens';
 
         // Exibir nome da sala
         document.getElementById('roomNameDisplay').textContent = roomData.name;
@@ -209,13 +198,6 @@ async function initializeGame() {
 }
 
 /**
- * Converter estilo antigo para novo formato
- */
-function convertStyle(oldStyle) {
-    return STYLE_MAP[oldStyle] || oldStyle;
-}
-
-/**
  * Selecionar imagens aleatórias para um baralho
  */
 function getRandomCardImages(style, count = 20) {
@@ -250,8 +232,8 @@ async function addBotPlayer() {
         }
         
         const botId = 'bot_' + Date.now();
-        // Usar apenas os estilos base disponíveis
-        const botStyles = ['neon-circuit', 'arcane-sigil', 'flux-ember', 'minimal-prime'];
+        // Usar os 5 estilos com imagens
+        const botStyles = ['personagens', 'animais', 'simbolos', 'cyber', 'dark'];
         const randomStyle = botStyles[Math.floor(Math.random() * botStyles.length)];
         
         // Adicionar bot aos jogadores
@@ -297,7 +279,7 @@ async function initializeGameState() {
 
         playerIds.forEach(playerId => {
             const player = roomData.players[playerId];
-            const playerStyle = convertStyle(player.style || 'cyber');
+            const playerStyle = player.style || 'personagens';
             const images = getRandomCardImages(playerStyle, 20);
 
             images.forEach((imagePath, index) => {
@@ -745,11 +727,11 @@ async function resolveCard(card, index, playerId) {
         console.log('Carta ownerStyle:', card.ownerStyle);
         console.log('Jogador style:', players[playerId]?.style);
 
-        // CORRIGIDO: Converter estilo do jogador para comparação
-        const playerConvertedStyle = convertStyle(players[playerId]?.style || 'cyber');
-        const belongsToCurrentPlayer = card.ownerStyle === playerConvertedStyle;
+        // Comparar estilos diretamente (sem conversão)
+        const playerStyle = players[playerId]?.style || 'personagens';
+        const belongsToCurrentPlayer = card.ownerStyle === playerStyle;
         
-        console.log('Estilo convertido do jogador:', playerConvertedStyle);
+        console.log('Estilo do jogador:', playerStyle);
         console.log('Pertence ao jogador?', belongsToCurrentPlayer);
 
         // Atualizar estado
@@ -848,7 +830,7 @@ async function transferCardToOwner(fromPlayerId, cardIndex, toPlayerId) {
  */
 function getCardOwnerId(ownerStyle) {
     for (const [playerId, player] of Object.entries(players)) {
-        if (convertStyle(player.style) === ownerStyle) {
+        if (player.style === ownerStyle) {
             return playerId;
         }
     }

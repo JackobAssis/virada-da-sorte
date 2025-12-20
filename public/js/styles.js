@@ -1,93 +1,54 @@
 /**
  * Gerenciador de Estilos
- * Define e gerencia todos os estilos disponíveis (gratuitos e premium)
+ * Define e gerencia os 5 estilos com imagens disponíveis
  */
 
 const STYLES_CONFIG = {
-    // Estilos Gratuitos (CSS puro)
-    'neon-circuit': {
-        id: 'neon-circuit',
-        name: 'Neon Circuit',
+    // Estilos Gratuitos com Imagens
+    'personagens': {
+        id: 'personagens',
+        name: 'Personagens',
         type: 'free',
-        className: 'style-neon-circuit',
-        description: 'Futurista com circuitos neon e cyberpunk',
+        className: 'style-personagens',
+        description: 'Cartas com personagens únicos',
+        folder: 'Personagens',
         unlocked: true
     },
-    'arcane-sigil': {
-        id: 'arcane-sigil',
-        name: 'Arcane Sigil',
+    'animais': {
+        id: 'animais',
+        name: 'Animais',
         type: 'free',
-        className: 'style-arcane-sigil',
-        description: 'Místico com runas e magia arcana',
+        className: 'style-animais',
+        description: 'Cartas com animais diversos',
+        folder: 'Animais',
         unlocked: true
     },
-    'minimal-prime': {
-        id: 'minimal-prime',
-        name: 'Minimal Prime',
+    'simbolos': {
+        id: 'simbolos',
+        name: 'Símbolos',
         type: 'free',
-        className: 'style-minimal-prime',
-        description: 'Minimalista clean e elegante',
+        className: 'style-simbolos',
+        description: 'Cartas com símbolos místicos',
+        folder: 'Simbolos',
         unlocked: true
     },
-    'flux-ember': {
-        id: 'flux-ember',
-        name: 'Flux Ember',
+    'cyber': {
+        id: 'cyber',
+        name: 'Cyber',
         type: 'free',
-        className: 'style-flux-ember',
-        description: 'Energético com movimento e intensidade',
+        className: 'style-cyber',
+        description: 'Cartas futuristas cyberpunk',
+        folder: 'Cyber',
         unlocked: true
     },
-
-    // Estilos Premium (com imagens)
-    'premium-cosmos': {
-        id: 'premium-cosmos',
-        name: 'Cosmos Premium',
-        type: 'premium',
-        className: 'style-premium-cosmos',
-        description: 'Pacote premium com imagens do cosmos',
-        packPath: 'packs/cosmos',
-        price: 9.99,
-        unlocked: false
-    },
-    'premium-nature': {
-        id: 'premium-nature',
-        name: 'Nature Premium',
-        type: 'premium',
-        className: 'style-premium-nature',
-        description: 'Pacote premium com elementos naturais',
-        packPath: 'packs/nature',
-        price: 9.99,
-        unlocked: false
-    },
-    'premium-fantasy': {
-        id: 'premium-fantasy',
-        name: 'Fantasy Premium',
-        type: 'premium',
-        className: 'style-premium-fantasy',
-        description: 'Pacote premium temático de fantasia',
-        packPath: 'packs/fantasy',
-        price: 12.99,
-        unlocked: false
-    },
-    'premium-cyberpunk': {
-        id: 'premium-cyberpunk',
-        name: 'Cyberpunk Premium',
-        type: 'premium',
-        className: 'style-premium-cyberpunk',
-        description: 'Pacote premium futurista cyberpunk',
-        packPath: 'packs/cyberpunk',
-        price: 12.99,
-        unlocked: false
-    },
-    'premium-ocean': {
-        id: 'premium-ocean',
-        name: 'Ocean Premium',
-        type: 'premium',
-        className: 'style-premium-ocean',
-        description: 'Pacote premium com tema oceânico',
-        packPath: 'packs/ocean',
-        price: 9.99,
-        unlocked: false
+    'dark': {
+        id: 'dark',
+        name: 'Dark',
+        type: 'free',
+        className: 'style-dark',
+        description: 'Cartas com tema dark',
+        folder: 'Dark',
+        unlocked: true
     }
 };
 
