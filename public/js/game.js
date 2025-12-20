@@ -1,35 +1,83 @@
 /**
- * Lógica do Jogo - Virada da Sorte
- * Jogo de Posse de Cartas - Coletar todas as cartas do seu estilo
- * 
- * MECÂNICA:
- * - Cada jogador tem um estilo de carta (neon-circuit, arcane-sigil, etc)
- * - Cartas são distribuídas em pilhas para cada jogador
- * - Apenas a carta do TOPO pode ser revelada
- * - Se revelar carta do SEU estilo: mantém turno e carta
- * - Se revelar carta do OPONENTE: passa turno, carta vai para o dono, você recebe uma aleatória
- * - Vitória: Primeiro a coletar TODAS as cartas do seu estilo
+ * VIRADA DA SORTE - Sistema Completo de Jogo
+ * Mecânica: Coletar todas as cartas do seu baralho
  */
+
+// ========================================
+// CONFIGURAÇÃO DAS IMAGENS POR ESTILO
+// ========================================
+
+const STYLE_IMAGES = {
+    personagens: Array.from({length: 21}, (_, i) => 
+        `/images/Personagens/personagem-card-${String(i + 1).padStart(2, '0')}.png`
+    ),
+    animais: Array.from({length: 21}, (_, i) => 
+        `/images/Animais/animal-card-${String(i + 1).padStart(2, '0')}.png`
+    ),
+    simbolos: Array.from({length: 21}, (_, i) => 
+        `/images/Simbolos/simbolo-card-${String(i + 1).padStart(2, '0')}.png`
+    ),
+    cyber: Array.from({length: 21}, (_, i) => 
+        `/images/Cyber/cyber-card-${String(i + 1).padStart(2, '0')}.png`
+    ),
+    dark: Array.from({length: 21}, (_, i) => 
+        `/images/Dark/dark-card-${String(i + 1).padStart(2, '0')}.png`
+    )
+};
+
+// Mapeamento de estilos antigos para novos
+const STYLE_MAP = {
+    'neon-circuit': 'cyber',
+    'arcane-sigil': 'simbolos',
+    'shadow-realm': 'dark',
+    'celestial-burst': 'personagens',
+    'prism-wave': 'animais'
+};
+
+// ========================================
+// ESTADOS DO JOGO
+// ========================================
+
+const GAME_STATES = {
+    SETUP: 'setup',
+    SHUFFLING: 'embaralhando',
+    DISTRIBUTING: 'distribuindo',
+    WAITING_PLAY: 'aguardandoJogada',
+    FLIPPING_CARD: 'virandoCarta',
+    RESOLVING_CARD: 'resolvendoCarta',
+    CHECKING_VICTORY: 'verificandoVitoria',
+    GAME_OVER: 'fimDePartida'
+};
+
+const CARD_STATES = {
+    FACE_DOWN: 'faceDown',
+    FLIPPING: 'flipping',
+    FACE_UP: 'faceUp',
+    RESOLVED: 'resolved'
+};
+
+// ========================================
+// VARIÁVEIS GLOBAIS
+// ========================================
 
 let currentUser = null;
 let roomId = null;
 let roomData = null;
+let gameState = GAME_STATES.SETUP;
 let gameStateListener = null;
-let playersListener = null;
-let myStyle = 'neon-circuit';
+let roomListener = null;
+
+// Dados do jogo
+let players = {};
 let myPlayerId = null;
-let opponentId = null;
-let isMyTurn = false;
-let canReveal = true;
-let turnTimer = null;
-const TURN_TIMEOUT = 30; // 30 segundos por turno
+let currentTurnPlayerId = null;
+let myStyle = '';
+let cardsInGame = []; // Todas as cartas do jogo
 
-// Símbolos disponíveis para as cartas
-const SYMBOLS = ['heart', 'star', 'diamond', 'clover', 'crown', 'moon', 'sun', 'lightning', 'fire', 'water'];
+// ========================================
+// INICIALIZAÇÃO
+// ========================================
 
-/**
- * Inicialização
- */
 auth.onAuthStateChanged(async (user) => {
     if (!user) {
         window.location.href = 'index.html';
@@ -38,7 +86,6 @@ auth.onAuthStateChanged(async (user) => {
 
     currentUser = user;
 
-    // Obter ID da sala da URL
     const urlParams = new URLSearchParams(window.location.search);
     roomId = urlParams.get('room');
 
@@ -56,238 +103,123 @@ auth.onAuthStateChanged(async (user) => {
  */
 async function initializeGame() {
     try {
-        // Carregar dados da sala
+        console.log('🎮 Iniciando jogo...');
+
+        // Carregar sala
         const roomSnapshot = await dbRef.room(roomId).once('value');
         roomData = roomSnapshot.val();
 
         if (!roomData) {
-            alert('Sala não encontrada');
+            alert('❌ Sala não encontrada');
             window.location.href = 'lobby.html';
             return;
         }
 
-        // Verificar se usuário está na sala
         if (!roomData.players || !roomData.players[currentUser.uid]) {
-            alert('Você não está nesta sala');
+            alert('❌ Você não está nesta sala');
             window.location.href = 'lobby.html';
             return;
         }
 
-        // Obter estilo do jogador
-        myStyle = roomData.players[currentUser.uid].style || 'neon-circuit';
+        myPlayerId = currentUser.uid;
+        myStyle = convertStyle(roomData.players[myPlayerId].style || 'cyber');
 
         // Exibir nome da sala
         document.getElementById('roomNameDisplay').textContent = roomData.name;
 
-        // Verificar status da sala
-        console.log('📊 Status da sala:', roomData.status);
+        console.log('👤 Meu estilo:', myStyle);
+        console.log('🎯 Status da sala:', roomData.status);
 
-        const playerCount = Object.keys(roomData.players || {}).length;
-        const maxPlayers = roomData.maxPlayers || 2;
-        
-        console.log('👥 Análise de jogadores:', {
-            playerCount,
-            maxPlayers,
-            isHost: roomData.host === currentUser.uid,
-            status: roomData.status,
-            autoBot: roomData.autoBot,
-            quickPlay: roomData.quickPlay,
-            players: Object.keys(roomData.players || {})
-        });
-        
-        // Bot só é adicionado quando a partida é INICIADA, não automaticamente
-        // Removida a lógica de adicionar bot aqui
+        // Setup listeners
+        setupRoomListener();
+        setupGameStateListener();
 
-        // Recalcular contagem de jogadores
-        const currentPlayerCount = Object.keys(roomData.players || {}).length;
-        console.log('👥 Contagem atual de jogadores:', currentPlayerCount);
-
-        // Configurar event listeners ANTES de inicializar o jogo
-        setupEventListeners();
-        
-        // Configurar listeners do Firebase ANTES de inicializar
-        setupGameListeners();
-        
-        // Configurar sistema de presença
-        try {
-            setupPresenceSystem();
-        } catch (presenceError) {
-            console.warn('⚠️ Erro ao configurar sistema de presença:', presenceError);
-        }
-        
-        // Monitorar conexão do oponente (só se houver mais de 1 jogador)
-        if (currentPlayerCount >= 2) {
-            try {
-                monitorOpponentConnection();
-            } catch (monitorError) {
-                console.warn('⚠️ Erro ao monitorar oponente:', monitorError);
-            }
-        }
-
-        // Verificar se gameState já existe
-        console.log('🔍 Verificando se gameState já existe...');
+        // Verificar se já existe gameState
         const gameStateSnapshot = await dbRef.room(roomId).child('gameState').once('value');
         const existingGameState = gameStateSnapshot.val();
-        
+
         if (existingGameState) {
-            console.log('✅ GameState já existe, carregando...');
+            console.log('✅ GameState existe, carregando...');
             handleGameStateUpdate(existingGameState);
         } else {
-            // Só iniciar automaticamente se for Quick Play
-            const isQuickPlay = roomData.quickPlay === true;
-            
-            if (isQuickPlay && roomData.host === currentUser.uid) {
-                console.log('⚡ Quick Play detectado, adicionando bots e iniciando...');
+            // Se é o host e status é 'starting', inicializar
+            if (roomData.host === myPlayerId && (roomData.status === 'starting' || roomData.quickPlay)) {
+                console.log('🎮 Sou host, iniciando gameState...');
                 
-                // Calcular quantos bots são necessários
-                const botsNeeded = maxPlayers - currentPlayerCount;
-                const needsBots = botsNeeded > 0 && roomData.autoBot !== false;
-                
-                if (needsBots) {
-                    console.log(`🤖 Adicionando ${botsNeeded} bot(s)...`);
+                // Verificar se deve adicionar bot antes de iniciar
+                if (roomData.autoBot === true) {
+                    const playersSnapshot = await dbRef.room(roomId).child('players').once('value');
+                    const players = playersSnapshot.val();
+                    const playerCount = players ? Object.keys(players).length : 0;
                     
-                    for (let i = 0; i < botsNeeded; i++) {
+                    console.log(`👥 Jogadores na sala: ${playerCount}`);
+                    
+                    // Se tem apenas 1 jogador e autoBot está ativo, adicionar bot
+                    if (playerCount === 1) {
+                        console.log('🤖 Adicionando bot antes de iniciar...');
                         await addBotPlayer();
-                        await new Promise(resolve => setTimeout(resolve, 300));
+                        // Pequeno delay para garantir que o bot foi adicionado
+                        await new Promise(resolve => setTimeout(resolve, 500));
                     }
-                    
-                    console.log(`✅ ${botsNeeded} bot(s) adicionado(s)`);
                 }
                 
-                await initializeGameState();
-            } else if (roomData.status === 'starting' && roomData.host === currentUser.uid && currentPlayerCount >= 2) {
-                // Status já é 'starting', iniciar direto
-                console.log('🎮 Status "starting" detectado, iniciando jogo...');
                 await initializeGameState();
             } else {
-                console.log('⏳ Aguardando comando para iniciar:', {
-                    isHost: roomData.host === currentUser.uid,
-                    playerCount: currentPlayerCount,
-                    maxPlayers,
-                    status: roomData.status,
-                    vacancies: maxPlayers - currentPlayerCount,
-                    message: currentPlayerCount < maxPlayers 
-                        ? `Sala com vagas livres (${currentPlayerCount}/${maxPlayers})` 
-                        : 'Sala completa - aguardando host iniciar'
-                });
-                
-                // Mostrar mensagem apropriada
-                if (currentPlayerCount < maxPlayers) {
-                    const vacancies = maxPlayers - currentPlayerCount;
-                    showMessage(`⏳ ${vacancies} ${vacancies === 1 ? 'vaga disponível' : 'vagas disponíveis'}`);
-                } else if (roomData.host === currentUser.uid) {
-                    showMessage('✓ Pronto para iniciar - Volte ao lobby e clique em Iniciar');
-                }
+                console.log('⏳ Aguardando host iniciar o jogo...');
+                showMessage('⏳ Aguardando início da partida...');
             }
         }
 
-        console.log('✅ Jogo inicializado');
-        
-        // Mostrar mensagem de status apropriada
-        if (!existingGameState) {
-            if (roomData.status === 'waiting') {
-                const vacancies = maxPlayers - currentPlayerCount;
-                if (vacancies > 0) {
-                    showMessage(`⏳ Sala aguardando ${vacancies === 1 ? '1 jogador' : vacancies + ' jogadores'}`);
-                } else {
-                    showMessage('✓ Sala completa - Aguardando host iniciar');
-                }
-            } else if (roomData.status === 'starting') {
-                showMessage('🎮 Jogo iniciando...');
-            } else if (roomData.quickPlay) {
-                showMessage('⚡ Preparando partida rápida...');
-            }
-        }
-        
-        // Teste de botões
-        console.log('🔘 Testando botões:');
-        console.log('  - leaveGameBtn existe?', !!document.getElementById('leaveGameBtn'));
-        console.log('  - leaveGame função existe?', typeof window.leaveGame);
-        
     } catch (error) {
-        console.error('❌ Erro ao inicializar jogo:', error);
-        console.error('Stack completo:', error.stack);
-        console.error('Mensagem:', error.message);
-        alert('Erro ao carregar jogo: ' + error.message);
-        window.location.href = 'lobby.html';
+        console.error('❌ Erro ao inicializar:', error);
+        alert('Erro ao carregar jogo');
     }
 }
 
 /**
- * Configurar event listeners
+ * Converter estilo antigo para novo formato
  */
-function setupEventListeners() {
-    console.log('🔧 Configurando event listeners...');
-    
-    // Garantir que o DOM está pronto
-    const setup = () => {
-        const leaveBtn = document.getElementById('leaveGameBtn');
-        const returnBtn = document.getElementById('returnToLobby');
-        
-        console.log('🔍 Procurando botões:', {
-            leaveBtn: !!leaveBtn,
-            returnBtn: !!returnBtn
-        });
-        
-        if (leaveBtn) {
-            // Remover listener antigo se existir
-            leaveBtn.removeEventListener('click', leaveGame);
-            // Adicionar novo listener
-            leaveBtn.addEventListener('click', leaveGame);
-            console.log('✅ Listener do botão Sair configurado');
-        } else {
-            console.error('❌ Botão leaveGameBtn não encontrado');
-        }
-        
-        if (returnBtn) {
-            returnBtn.removeEventListener('click', returnToLobby);
-            returnBtn.addEventListener('click', returnToLobby);
-            console.log('✅ Listener do botão Retornar configurado');
-        } else {
-            console.log('⚠️ Botão returnToLobby não encontrado (esperado no modal)');
-        }
-    };
-    
-    // Executar imediatamente ou após DOM estar pronto
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setup);
-    } else {
-        setup();
-    }
+function convertStyle(oldStyle) {
+    return STYLE_MAP[oldStyle] || oldStyle;
 }
 
 /**
- * Adicionar jogador bot
+ * Selecionar imagens aleatórias para um baralho
+ */
+function getRandomCardImages(style, count = 20) {
+    const availableImages = [...STYLE_IMAGES[style]];
+    const selected = [];
+    
+    for (let i = 0; i < count && availableImages.length > 0; i++) {
+        const randomIndex = Math.floor(Math.random() * availableImages.length);
+        selected.push(availableImages.splice(randomIndex, 1)[0]);
+    }
+    
+    return selected;
+}
+
+/**
+ * Adicionar bot à sala
  */
 async function addBotPlayer() {
-    console.log('🤖 Função addBotPlayer() chamada');
-    
     try {
-        console.log('📊 Verificando sala:', {
-            roomId,
-            currentUser: currentUser?.uid
-        });
+        console.log('🤖 Adicionando bot...');
         
         // Verificar se já existe um bot na sala
         const playersSnapshot = await dbRef.room(roomId).child('players').once('value');
-        const players = playersSnapshot.val();
+        const currentPlayers = playersSnapshot.val();
         
-        if (players) {
-            const hasBot = Object.values(players).some(p => p.isBot === true);
+        if (currentPlayers) {
+            const hasBot = Object.values(currentPlayers).some(p => p.isBot === true);
             if (hasBot) {
-                console.log('⚠️ Bot já existe na sala, não será adicionado novamente');
+                console.log('⚠️ Bot já existe na sala');
                 return;
             }
         }
         
         const botId = 'bot_' + Date.now();
-        const botStyles = ['neon-circuit', 'arcane-sigil', 'minimal-prime', 'flux-ember'];
+        const botStyles = ['neon-circuit', 'arcane-sigil', 'shadow-realm', 'celestial-burst', 'prism-wave'];
         const randomStyle = botStyles[Math.floor(Math.random() * botStyles.length)];
-        
-        console.log('⚙️ Criando bot:', {
-            botId,
-            style: randomStyle
-        });
         
         // Adicionar bot aos jogadores
         await dbRef.room(roomId).child('players').child(botId).set({
@@ -301,27 +233,7 @@ async function addBotPlayer() {
             isBot: true
         });
 
-        // Verificar se a sala ficou completa
-        const updatedPlayersSnapshot = await dbRef.room(roomId).child('players').once('value');
-        const updatedPlayers = updatedPlayersSnapshot.val();
-        const playerCount = Object.keys(updatedPlayers || {}).length;
-        
-        const roomSnapshot = await dbRef.room(roomId).once('value');
-        const room = roomSnapshot.val();
-        const maxPlayers = room.maxPlayers || 2;
-
-        // Atualizar status da sala se ficou completa
-        if (playerCount >= maxPlayers) {
-            await dbRef.room(roomId).update({
-                status: 'full'
-            });
-            console.log('✅ Sala marcada como completa');
-        }
-
-        console.log('✅ Bot adicionado à sala');
-        
-        // Recarregar dados da sala
-        roomData = room;
+        console.log('✅ Bot adicionado:', botId);
         
     } catch (error) {
         console.error('❌ Erro ao adicionar bot:', error);
@@ -329,252 +241,81 @@ async function addBotPlayer() {
 }
 
 /**
- * Configurar listeners do Firebase
- */
-function setupGameListeners() {
-    console.log('🔧 Configurando listeners do Firebase...');
-    
-    // Listener para mudanças nos jogadores
-    playersListener = dbRef.room(roomId).child('players').on('value', (snapshot) => {
-        const players = snapshot.val();
-        console.log('👥 Players atualizado:', players);
-        
-        // Verificar se sala ficou vazia ou só com bots
-        if (!players || Object.keys(players).length === 0) {
-            console.log('⚠️ Sala ficou vazia, retornando ao lobby...');
-            showMessage('Sala encerrada - todos os jogadores saíram');
-            setTimeout(() => {
-                window.location.href = 'lobby.html';
-            }, 2000);
-            return;
-        }
-        
-        // Verificar se só restaram bots
-        const onlyBots = Object.values(players).every(p => p.isBot === true);
-        if (onlyBots) {
-            console.log('🤖 Apenas bots na sala, retornando ao lobby...');
-            showMessage('Sala encerrada - sem jogadores reais');
-            setTimeout(() => {
-                window.location.href = 'lobby.html';
-            }, 2000);
-            return;
-        }
-        
-        updatePlayersDisplay(players);
-    });
-
-    // Listener para mudanças no estado do jogo
-    gameStateListener = dbRef.room(roomId).child('gameState').on('value', (snapshot) => {
-        const gameState = snapshot.val();
-        console.log('🎮 GameState atualizado via listener:', gameState);
-        handleGameStateUpdate(gameState);
-    });
-    
-    // Listener para mudanças no status da sala
-    const statusListener = dbRef.room(roomId).child('status').on('value', async (snapshot) => {
-        const status = snapshot.val();
-        console.log('📊 Status da sala mudou para:', status);
-        
-        // Se o status mudou para 'starting', iniciar o jogo
-        if (status === 'starting' && roomData.host === currentUser.uid) {
-            const gameStateCheck = await dbRef.room(roomId).child('gameState').once('value');
-            if (!gameStateCheck.val()) {
-                console.log('🎮 Status "starting" detectado, verificando necessidade de bot...');
-                
-                // Verificar se precisa adicionar bot ANTES de iniciar
-                const roomSnapshot = await dbRef.room(roomId).once('value');
-                const room = roomSnapshot.val();
-                
-                if (room) {
-                    const playerCount = Object.keys(room.players || {}).length;
-                    const maxPlayers = room.maxPlayers || 2;
-                    const botsNeeded = maxPlayers - playerCount;
-                    const needsBots = botsNeeded > 0 && room.autoBot !== false;
-                    
-                    if (needsBots) {
-                        console.log(`🤖 Adicionando ${botsNeeded} bot(s) antes de iniciar partida...`);
-                        
-                        // Adicionar bots necessários
-                        for (let i = 0; i < botsNeeded; i++) {
-                            await addBotPlayer();
-                            await new Promise(resolve => setTimeout(resolve, 300));
-                        }
-                        
-                        console.log(`✅ ${botsNeeded} bot(s) adicionado(s)`);
-                    }
-                }
-                
-                // Agora sim, inicializar o jogo
-                await initializeGameState();
-            }
-        }
-    });
-    
-    console.log('✅ Listeners configurados');
-}
-
-/**
- * Inicializar estado do jogo
+ * Inicializar estado do jogo (criar baralhos, embaralhar, distribuir)
  */
 async function initializeGameState() {
-    console.log('🎮 Iniciando estado do jogo...');
-    
     try {
-        // Verificar se gameState já existe para evitar duplicação
-        const gameStateCheck = await dbRef.room(roomId).child('gameState').once('value');
-        if (gameStateCheck.val()) {
-            console.log('⚠️ GameState já existe, não será recriado');
-            return;
-        }
-        
-        console.log('📊 Dados da sala:', {
-            roomData,
-            players: roomData?.players
+        console.log('🎲 Criando estado inicial do jogo...');
+
+        // Estado inicial: SHUFFLING
+        await dbRef.room(roomId).child('gameState').set({
+            status: GAME_STATES.SHUFFLING,
+            currentTurn: null,
+            winner: null,
+            players: {}
         });
-        
+
+        // Aguardar para mostrar animação
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Criar baralhos para cada jogador
         const playerIds = Object.keys(roomData.players);
-        console.log('👥 IDs dos jogadores:', playerIds);
-        
-        if (playerIds.length < 2) {
-            console.error('❌ Menos de 2 jogadores na sala!');
-            return;
-        }
-        
-        const player1Id = playerIds[0];
-        const player2Id = playerIds[1];
-        
-        const player1Style = roomData.players[player1Id].style;
-        const player2Style = roomData.players[player2Id].style;
-        
-        console.log('🎨 Estilos dos jogadores:', {
-            player1: player1Style,
-            player2: player2Style
+        const allCards = [];
+
+        playerIds.forEach(playerId => {
+            const player = roomData.players[playerId];
+            const playerStyle = convertStyle(player.style || 'cyber');
+            const images = getRandomCardImages(playerStyle, 20);
+
+            images.forEach((imagePath, index) => {
+                allCards.push({
+                    id: `${playerId}-${index}`,
+                    ownerStyle: playerStyle,
+                    ownerId: playerId,
+                    imagePath: imagePath,
+                    state: CARD_STATES.FACE_DOWN
+                });
+            });
         });
 
-        // Gerar cartas com estilos de cada jogador (10 cartas de cada = 20 total)
-        console.log('🃏 Gerando cartas...');
-        const cards = generateCardsWithOwnership(player1Style, player2Style, 10);
-        console.log('✅ Cartas geradas:', cards.length);
+        // Embaralhar todas as cartas
+        console.log('🔄 Embaralhando', allCards.length, 'cartas...');
+        const shuffled = shuffleArray(allCards);
 
-        // Definir primeiro jogador aleatoriamente
-        const firstPlayer = playerIds[Math.floor(Math.random() * playerIds.length)];
-        console.log('🎲 Primeiro jogador:', firstPlayer);
+        // Estado: DISTRIBUTING
+        await dbRef.room(roomId).child('gameState/status').set(GAME_STATES.DISTRIBUTING);
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
-        // Criar pilhas iniciais para cada jogador (distribuir cartas aleatoriamente)
-        console.log('🔀 Embaralhando cartas...');
-        const shuffled = shuffleArray(cards);
-        const halfPoint = Math.floor(shuffled.length / 2);
-        
-        const player1Pile = shuffled.slice(0, halfPoint).map((card, index) => ({
-            ...card,
-            dono_atual: player1Id,
-            posicao_pilha: index
-        }));
-        
-        const player2Pile = shuffled.slice(halfPoint).map((card, index) => ({
-            ...card,
-            dono_atual: player2Id,
-            posicao_pilha: index
-        }));
+        // Distribuir cartas igualmente para cada jogador
+        const cardsPerPlayer = 20;
+        const playersState = {};
 
-        console.log('📚 Pilhas criadas:', {
-            player1Pile: player1Pile.length,
-            player2Pile: player2Pile.length
+        playerIds.forEach((playerId, index) => {
+            const start = index * cardsPerPlayer;
+            const end = start + cardsPerPlayer;
+            const playerDeck = shuffled.slice(start, end);
+
+            playersState[playerId] = {
+                deck: playerDeck,
+                collected: []
+            };
         });
 
-        const gameState = {
-            status: 'playing',
-            players: {
-                [player1Id]: {
-                    pile: player1Pile,
-                    collectedStyles: []
-                },
-                [player2Id]: {
-                    pile: player2Pile,
-                    collectedStyles: []
-                }
-            },
+        // Definir primeiro jogador (host)
+        const firstPlayer = roomData.host;
+
+        // Iniciar jogo
+        await dbRef.room(roomId).child('gameState').update({
+            status: GAME_STATES.WAITING_PLAY,
             currentTurn: firstPlayer,
-            lastRevealedCard: null,
-            lastAction: firebase.database.ServerValue.TIMESTAMP,
-            turnStartTime: firebase.database.ServerValue.TIMESTAMP
-        };
-
-        console.log('💾 Salvando estado no Firebase...');
-        await dbRef.room(roomId).child('gameState').set(gameState);
-
-        // Atualizar status da sala para 'playing'
-        await dbRef.room(roomId).update({
-            status: 'playing',
-            gameStartedAt: firebase.database.ServerValue.TIMESTAMP
+            players: playersState
         });
 
-        console.log('✅ Estado do jogo inicializado com sucesso!');
-        
-        // Forçar atualização da interface
-        console.log('🔄 Disparando atualização inicial da interface...');
-        handleGameStateUpdate(gameState);
-        
+        console.log('✅ Jogo iniciado!');
+
     } catch (error) {
-        console.error('❌ Erro ao inicializar estado:', error);
-        console.error('Stack trace:', error.stack);
+        console.error('❌ Erro ao inicializar gameState:', error);
     }
-}
-
-/**
- * Gerar cartas com propriedade (estilo real)
- * @param {string} style1 - Estilo do jogador 1
- * @param {string} style2 - Estilo do jogador 2
- * @param {number} cardsPerPlayer - Quantas cartas de cada estilo
- */
-function generateCardsWithOwnership(style1, style2, cardsPerPlayer) {
-    const cards = [];
-    let cardId = 0;
-    
-    // Criar cartas do estilo do jogador 1
-    for (let i = 0; i < cardsPerPlayer; i++) {
-        const symbol = SYMBOLS[i % SYMBOLS.length];
-        cards.push({
-            id: cardId++,
-            symbol: symbol,
-            estilo_real: style1, // Dono verdadeiro (imutável)
-            dono_atual: null, // Será definido ao distribuir
-            estado: 'oculta', // oculta | revelada
-            posicao_pilha: 0 // Posição na pilha do dono atual
-        });
-    }
-    
-    // Criar cartas do estilo do jogador 2
-    for (let i = 0; i < cardsPerPlayer; i++) {
-        const symbol = SYMBOLS[i % SYMBOLS.length];
-        cards.push({
-            id: cardId++,
-            symbol: symbol,
-            estilo_real: style2,
-            dono_atual: null,
-            estado: 'oculta',
-            posicao_pilha: 0
-        });
-    }
-    
-    return cards;
-}
-
-/**
- * Gerar cartas embaralhadas
- */
-function generateCards(pairCount) {
-    const cards = [];
-    
-    // Criar pares
-    for (let i = 0; i < pairCount; i++) {
-        const symbol = SYMBOLS[i % SYMBOLS.length];
-        cards.push({ id: i * 2, symbol: symbol, flipped: false, matched: false });
-        cards.push({ id: i * 2 + 1, symbol: symbol, flipped: false, matched: false });
-    }
-
-    // Embaralhar
-    return shuffleArray(cards);
 }
 
 /**
@@ -589,890 +330,663 @@ function shuffleArray(array) {
     return shuffled;
 }
 
-/**
- * Atualizar display dos jogadores
- */
-function updatePlayersDisplay(players) {
-    if (!players) return;
+// ========================================
+// LISTENERS
+// ========================================
 
-    const playerIds = Object.keys(players);
-    
-    playerIds.forEach((playerId, index) => {
-        const player = players[playerId];
-        const playerInfo = document.getElementById(`player${index + 1}Info`);
+/**
+ * Listener da sala
+ */
+function setupRoomListener() {
+    if (roomListener) {
+        dbRef.room(roomId).off('value', roomListener);
+    }
+
+    roomListener = dbRef.room(roomId).on('value', (snapshot) => {
+        const room = snapshot.val();
         
-        if (playerInfo) {
-            const isCurrentPlayer = playerId === currentUser.uid;
-            const nameSpan = playerInfo.querySelector('.player-name');
-            const scoreSpan = playerInfo.querySelector('.player-score');
-            
-            if (nameSpan) {
-                nameSpan.textContent = player.name + (isCurrentPlayer ? ' (Você)' : '');
-            }
-            
-            if (scoreSpan) {
-                scoreSpan.textContent = `Pontos: ${player.score || 0}`;
-            }
-        }
-    });
-}
-
-/**
- * Manipular atualização do estado do jogo
- */
-function handleGameStateUpdate(gameState) {
-    console.log('🔄 handleGameStateUpdate chamado:', gameState);
-    
-    if (!gameState || !gameState.players) {
-        console.log('⚠️ GameState inválido ou sem jogadores');
-        return;
-    }
-
-    console.log('✅ GameState válido, atualizando interface...');
-
-    // Atualizar turno
-    isMyTurn = gameState.currentTurn === currentUser.uid;
-    const turnIndicator = document.getElementById('turnIndicator');
-    
-    console.log('🎯 Turno:', {
-        currentTurn: gameState.currentTurn,
-        isMyTurn,
-        myId: currentUser.uid
-    });
-    
-    if (turnIndicator) {
-        turnIndicator.textContent = isMyTurn ? '🎯 Sua vez!' : '⏳ Vez do oponente';
-        turnIndicator.style.background = isMyTurn ? 'var(--primary)' : 'var(--bg-light)';
-    }
-
-    // Marcar jogador ativo
-    document.querySelectorAll('.player-info').forEach(info => {
-        info.classList.remove('active');
-    });
-    
-    const playerIndex = Object.keys(gameState.players).indexOf(gameState.currentTurn);
-    document.getElementById(`player${playerIndex + 1}Info`)?.classList.add('active');
-
-    // Renderizar pilhas de cartas
-    renderPlayerPiles(gameState);
-
-    // Verificar condição de vitória
-    checkVictoryCondition(gameState);
-    
-    // Iniciar timer de turno se for minha vez
-    if (isMyTurn) {
-        startTurnTimer();
-    } else {
-        clearTurnTimer();
-        
-        // Se for turno do bot, jogar automaticamente
-        checkBotTurn(gameState);
-    }
-}
-
-/**
- * Iniciar timer do turno (30 segundos)
- */
-function startTurnTimer() {
-    // Limpar timer existente
-    clearTurnTimer();
-
-    let timeLeft = TURN_TIMEOUT;
-    updateTimerDisplay(timeLeft);
-
-    turnTimer = setInterval(() => {
-        timeLeft--;
-        updateTimerDisplay(timeLeft);
-
-        if (timeLeft <= 0) {
-            clearTurnTimer();
-            if (isMyTurn) {
-                // Tempo esgotado, revelar carta automaticamente
-                autoRevealCard();
-            }
-        }
-    }, 1000);
-}
-
-/**
- * Limpar timer do turno
- */
-function clearTurnTimer() {
-    if (turnTimer) {
-        clearInterval(turnTimer);
-        turnTimer = null;
-    }
-}
-
-/**
- * Atualizar display do timer
- */
-function updateTimerDisplay(seconds) {
-    const timerElement = document.getElementById('turn-timer');
-    if (timerElement) {
-        timerElement.textContent = `⏱️ ${seconds}s`;
-        
-        // Adicionar alerta visual quando tempo estiver acabando
-        if (seconds <= 5) {
-            timerElement.classList.add('timer-warning');
-        } else {
-            timerElement.classList.remove('timer-warning');
-        }
-    }
-}
-
-/**
- * Revelar carta automaticamente quando tempo acabar
- */
-async function autoRevealCard() {
-    if (!isMyTurn) return;
-    
-    showMessage('⏰ Tempo esgotado! Revelando carta automaticamente...');
-    
-    // Aguardar 1 segundo e revelar
-    setTimeout(() => {
-        revealTopCard();
-    }, 1000);
-}
-
-/**
- * Verificar se é turno do bot e jogar automaticamente
- */
-async function checkBotTurn(gameState) {
-    const currentTurnPlayer = gameState.currentTurn;
-    
-    // Verificar se há jogadores na sala
-    if (!roomData || !roomData.players) return;
-    
-    // Verificar se o jogador atual é um bot
-    const currentPlayer = roomData.players[currentTurnPlayer];
-    if (!currentPlayer || !currentPlayer.isBot) return;
-    
-    // Bot detectado, jogar automaticamente após delay (simular pensamento)
-    const thinkingTime = 1500 + Math.random() * 1500; // 1.5s a 3s
-    
-    console.log('🤖 Bot detectado, jogando em', Math.round(thinkingTime / 1000), 'segundos...');
-    
-    setTimeout(async () => {
-        await botPlayTurn(currentTurnPlayer, gameState);
-    }, thinkingTime);
-}
-
-/**
- * Bot joga seu turno
- */
-async function botPlayTurn(botId, gameState) {
-    try {
-        // Usar transação para garantir consistência
-        await dbRef.room(roomId).child('gameState').transaction((currentState) => {
-            if (!currentState || !currentState.players) return;
-            
-            // Verificar se ainda é turno do bot
-            if (currentState.currentTurn !== botId) {
-                return; // Abortar se não for mais o turno do bot
-            }
-
-            const botPile = currentState.players[botId].pile;
-            
-            if (!botPile || botPile.length === 0) {
-                return; // Sem cartas para revelar
-            }
-
-            // Pegar carta do topo
-            const topCard = botPile[botPile.length - 1];
-            
-            // Revelar carta
-            topCard.estado = 'revelada';
-            
-            // Obter estilo do bot
-            const botStyle = roomData.players[botId].style;
-            const isMyStyle = topCard.estilo_real === botStyle;
-            
-            if (isMyStyle) {
-                // ✅ Carta é do bot! Manter turno e coletar
-                botPile.pop();
-                
-                if (!currentState.players[botId].collectedStyles) {
-                    currentState.players[botId].collectedStyles = [];
-                }
-                currentState.players[botId].collectedStyles.push(topCard);
-                
-                currentState.lastRevealedCard = {
-                    ...topCard,
-                    action: 'collected',
-                    by: botId
-                };
-                
-                // MANTÉM O TURNO
-                console.log('🤖 Bot coletou carta do seu estilo');
-                
-            } else {
-                // ❌ Carta é do oponente! Transferir e passar turno
-                const playerIds = Object.keys(currentState.players);
-                const opponentId = playerIds.find(id => id !== botId);
-                
-                botPile.pop();
-                
-                if (!currentState.players[opponentId].collectedStyles) {
-                    currentState.players[opponentId].collectedStyles = [];
-                }
-                currentState.players[opponentId].collectedStyles.push(topCard);
-                
-                // Transferir carta aleatória
-                const opponentPile = currentState.players[opponentId].pile;
-                
-                if (opponentPile && opponentPile.length > 0) {
-                    const randomIndex = Math.floor(Math.random() * opponentPile.length);
-                    const transferredCard = opponentPile.splice(randomIndex, 1)[0];
-                    
-                    transferredCard.dono_atual = botId;
-                    transferredCard.estado = 'oculta';
-                    transferredCard.posicao_pilha = botPile.length;
-                    botPile.push(transferredCard);
-                }
-                
-                currentState.lastRevealedCard = {
-                    ...topCard,
-                    action: 'transferred',
-                    from: botId,
-                    to: opponentId
-                };
-                
-                // PASSAR TURNO
-                currentState.currentTurn = opponentId;
-                currentState.turnStartTime = firebase.database.ServerValue.TIMESTAMP;
-                
-                console.log('🤖 Bot revelou carta do oponente, turno passado');
-            }
-            
-            currentState.lastAction = firebase.database.ServerValue.TIMESTAMP;
-            
-            return currentState;
-        });
-
-    } catch (error) {
-        console.error('❌ Erro no turno do bot:', error);
-    }
-}
-
-/**
- * Renderizar pilhas dos jogadores
- */
-function renderPlayerPiles(gameState) {
-    console.log('🎨 Renderizando pilhas dos jogadores...');
-    
-    const gameBoard = document.getElementById('gameBoard');
-    if (!gameBoard) {
-        console.error('❌ gameBoard não encontrado!');
-        return;
-    }
-
-    gameBoard.innerHTML = '';
-    gameBoard.className = 'game-board piles-layout';
-
-    const playerIds = Object.keys(gameState.players);
-    console.log('👥 Renderizando para jogadores:', playerIds);
-    
-    playerIds.forEach((playerId, index) => {
-        const playerState = gameState.players[playerId];
-        const pile = playerState.pile || [];
-        const isMe = playerId === currentUser.uid;
-        
-        console.log(`📚 Pilha de ${isMe ? 'você' : 'oponente'}:`, {
-            cartas: pile.length,
-            coletadas: playerState.collectedStyles?.length || 0,
-            topCard: pile.length > 0 ? pile[pile.length - 1] : null
-        });
-        
-        // Container da pilha do jogador
-        const pileContainer = document.createElement('div');
-        pileContainer.className = `player-pile ${isMe ? 'my-pile' : 'opponent-pile'}`;
-        
-        // Título da pilha
-        const pileTitle = document.createElement('div');
-        pileTitle.className = 'pile-title';
-        pileTitle.textContent = isMe ? '🎴 Sua Pilha' : '🎴 Pilha do Oponente';
-        pileContainer.appendChild(pileTitle);
-        
-        // Info da pilha
-        const pileInfo = document.createElement('div');
-        pileInfo.className = 'pile-info';
-        pileInfo.innerHTML = `
-            <span>Cartas: ${pile.length}</span>
-            <span>Coletadas: ${playerState.collectedStyles?.length || 0}</span>
-        `;
-        pileContainer.appendChild(pileInfo);
-        
-        // Stack de cartas
-        const cardsStack = document.createElement('div');
-        cardsStack.className = 'cards-stack';
-        
-        if (pile.length > 0) {
-            // Mostrar apenas carta do topo
-            const topCard = pile[pile.length - 1];
-            const cardElement = createPileCardElement(topCard, isMe, isMyTurn && isMe);
-            cardsStack.appendChild(cardElement);
-            
-            console.log(`✅ Carta do topo renderizada para ${isMe ? 'você' : 'oponente'}`);
-        } else {
-            // Pilha vazia
-            const emptyMsg = document.createElement('div');
-            emptyMsg.className = 'empty-pile';
-            emptyMsg.textContent = 'Pilha vazia';
-            cardsStack.appendChild(emptyMsg);
-            
-            console.log(`⚠️ Pilha vazia para ${isMe ? 'você' : 'oponente'}`);
-        }
-        
-        pileContainer.appendChild(cardsStack);
-        gameBoard.appendChild(pileContainer);
-    });
-    
-    console.log('✅ Renderização de pilhas concluída');
-}
-
-/**
- * Criar elemento de carta na pilha
- */
-function createPileCardElement(card, isMyPile, canInteract) {
-    const cardElement = document.createElement('div');
-    cardElement.className = 'card pile-card';
-    cardElement.setAttribute('data-card-id', card.id);
-    
-    if (card.estado === 'revelada') {
-        cardElement.classList.add('revealed');
-    }
-    
-    if (!canInteract) {
-        cardElement.classList.add('disabled');
-    }
-
-    cardElement.innerHTML = `
-        <div class="card-inner">
-            <div class="card-back ${card.estado === 'oculta' ? 'visible' : ''}">
-                <div class="card-back-pattern"></div>
-            </div>
-            <div class="card-front ${card.estado === 'revelada' ? 'visible' : ''}">
-                <div class="card-symbol">${getSymbolIcon(card.symbol)}</div>
-                <div class="card-style-indicator">${card.estilo_real}</div>
-            </div>
-        </div>
-    `;
-
-    // Aplicar estilo visual
-    StylesManager.applyStyleToCard(cardElement, card.estilo_real, card.id);
-
-    // Event listener apenas para carta do topo da minha pilha
-    if (isMyPile && canInteract && card.estado === 'oculta') {
-        cardElement.addEventListener('click', () => revealTopCard());
-        cardElement.classList.add('clickable');
-    }
-
-    return cardElement;
-}
-
-/**
- * Obter ícone do símbolo
- */
-function getSymbolIcon(symbol) {
-    const icons = {
-        'heart': '❤️',
-        'star': '⭐',
-        'diamond': '💎',
-        'clover': '🍀',
-        'crown': '👑',
-        'moon': '🌙',
-        'sun': '☀️',
-        'lightning': '⚡',
-        'fire': '🔥',
-        'water': '💧'
-    };
-    return icons[symbol] || '❓';
-}
-
-/**
- * Revelar carta do topo (ação principal do jogo)
- */
-async function revealTopCard() {
-    if (!isMyTurn || !canReveal) {
-        showMessage('⚠️ Aguarde sua vez!');
-        return;
-    }
-
-    canReveal = false;
-
-    try {
-        // Usar transação para evitar race conditions
-        await dbRef.room(roomId).child('gameState').transaction((currentState) => {
-            if (!currentState || !currentState.players) return;
-            
-            // Verificar se ainda é meu turno
-            if (currentState.currentTurn !== currentUser.uid) {
-                return; // Abortar transação
-            }
-
-            const myPile = currentState.players[currentUser.uid].pile;
-            
-            if (!myPile || myPile.length === 0) {
-                return; // Sem cartas para revelar
-            }
-
-            // Pegar carta do topo
-            const topCard = myPile[myPile.length - 1];
-            
-            // Revelar carta
-            topCard.estado = 'revelada';
-            
-            // Verificar se a carta pertence ao meu estilo
-            const isMyStyle = topCard.estilo_real === myStyle;
-            
-            if (isMyStyle) {
-                // ✅ Carta é minha! Manter turno e coletar
-                
-                // Remover da pilha
-                myPile.pop();
-                
-                // Adicionar às cartas coletadas
-                if (!currentState.players[currentUser.uid].collectedStyles) {
-                    currentState.players[currentUser.uid].collectedStyles = [];
-                }
-                currentState.players[currentUser.uid].collectedStyles.push(topCard);
-                
-                // Incrementar pontuação
-                const playersSnapshot = roomData.players;
-                const currentScore = playersSnapshot[currentUser.uid]?.score || 0;
-                
-                // Atualizar score no Firebase (fora da transação)
-                setTimeout(() => {
-                    dbRef.room(roomId).child('players').child(currentUser.uid).update({
-                        score: currentScore + 1
-                    });
-                }, 100);
-                
-                currentState.lastRevealedCard = {
-                    ...topCard,
-                    action: 'collected',
-                    by: currentUser.uid
-                };
-                
-                // MANTÉM O TURNO (não muda currentTurn)
-                showMessage('✅ Carta sua! Continue jogando');
-                
-            } else {
-                // ❌ Carta é do oponente! Transferir e passar turno
-                
-                // Identificar oponente
-                const playerIds = Object.keys(currentState.players);
-                const opponentId = playerIds.find(id => id !== currentUser.uid);
-                
-                // Remover da minha pilha
-                myPile.pop();
-                
-                // Adicionar às cartas coletadas do oponente
-                if (!currentState.players[opponentId].collectedStyles) {
-                    currentState.players[opponentId].collectedStyles = [];
-                }
-                currentState.players[opponentId].collectedStyles.push(topCard);
-                
-                // Transferir uma carta aleatória do oponente para mim
-                const opponentPile = currentState.players[opponentId].pile;
-                
-                if (opponentPile && opponentPile.length > 0) {
-                    // Pegar carta aleatória (não necessariamente do topo)
-                    const randomIndex = Math.floor(Math.random() * opponentPile.length);
-                    const transferredCard = opponentPile.splice(randomIndex, 1)[0];
-                    
-                    // Adicionar à minha pilha
-                    transferredCard.dono_atual = currentUser.uid;
-                    transferredCard.estado = 'oculta'; // Resetar para oculta
-                    transferredCard.posicao_pilha = myPile.length;
-                    myPile.push(transferredCard);
-                }
-                
-                currentState.lastRevealedCard = {
-                    ...topCard,
-                    action: 'transferred',
-                    from: currentUser.uid,
-                    to: opponentId
-                };
-                
-                // PASSAR TURNO para o oponente
-                currentState.currentTurn = opponentId;
-                currentState.turnStartTime = firebase.database.ServerValue.TIMESTAMP;
-                
-                showMessage('📤 Carta do oponente! Turno passado');
-            }
-            
-            // Atualizar timestamp
-            currentState.lastAction = firebase.database.ServerValue.TIMESTAMP;
-            
-            return currentState;
-        });
-
-        // Após transação, habilitar novamente após delay
-        setTimeout(() => {
-            canReveal = true;
-        }, 1500);
-
-    } catch (error) {
-        console.error('❌ Erro ao revelar carta:', error);
-        canReveal = true;
-        showMessage('❌ Erro ao revelar carta');
-    }
-}
-
-/**
- * Verificar condição de vitória
- * Vence quem coletar todas as 10 cartas do seu estilo primeiro
- */
-function checkVictoryCondition(gameState) {
-    if (!gameState || !gameState.players) return;
-    
-    // Verificar se algum jogador coletou 10 cartas do seu estilo
-    for (const playerId of Object.keys(gameState.players)) {
-        const playerData = gameState.players[playerId];
-        const collectedStyles = playerData.collectedStyles || [];
-        
-        // Vitória = 10 cartas coletadas
-        if (collectedStyles.length >= 10) {
-            endGame(playerId);
-            return;
-        }
-    }
-}
-
-/**
- * Finalizar jogo
- */
-async function endGame(winnerId) {
-    try {
-        const playersSnapshot = await dbRef.room(roomId).child('players').once('value');
-        const players = playersSnapshot.val();
-
-        const isWinner = winnerId === currentUser.uid;
-        const winnerName = players[winnerId]?.displayName || players[winnerId]?.name || 'Jogador';
-
-        // Atualizar estado do jogo
-        await dbRef.room(roomId).child('gameState').update({
-            status: 'finished',
-            winner: winnerId,
-            endTime: firebase.database.ServerValue.TIMESTAMP
-        });
-
-        // Atualizar estatísticas
-        const currentStats = players[currentUser.uid].stats || {};
-        const gamesPlayed = (currentStats.gamesPlayed || 0) + 1;
-        const gamesWon = (currentStats.gamesWon || 0) + (isWinner ? 1 : 0);
-        const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0;
-
-        await dbRef.room(roomId).child('players').child(currentUser.uid).update({
-            stats: {
-                gamesPlayed,
-                gamesWon,
-                winRate
-            }
-        });
-
-        // Também atualizar no perfil global
-        await database.ref(`users/${currentUser.uid}`).update({
-            'stats/gamesPlayed': gamesPlayed,
-            'stats/gamesWon': gamesWon,
-            'stats/winRate': winRate
-        });
-
-        showMessage(isWinner ? `🎉 ${winnerName} venceu!` : `😔 ${winnerName} venceu!`);
-
-        // Mostrar modal de fim de jogo
-        setTimeout(() => {
-            if (confirm(isWinner ? '🎉 Parabéns! Você coletou todas as cartas do seu estilo! Jogar novamente?' : '😔 Fim de jogo. Tentar novamente?')) {
-                window.location.href = 'lobby.html';
-            }
-        }, 2000);
-
-    } catch (error) {
-        console.error('❌ Erro ao finalizar jogo:', error);
-    }
-}
-
-/**
- * Sair do jogo
- */
-async function leaveGame() {
-    console.log('🚪 Tentando sair da sala...');
-    
-    try {
-        if (!roomId || !currentUser) {
-            console.log('⚠️ Sem roomId ou currentUser, redirecionando...');
+        if (!room) {
+            console.log('❌ Sala foi removida');
             window.location.href = 'lobby.html';
             return;
         }
 
-        console.log('📤 Removendo jogador da sala:', currentUser.uid);
+        roomData = room;
+        players = room.players || {};
         
-        // Remover jogador da sala
-        await dbRef.room(roomId).child('players').child(currentUser.uid).remove();
+        updatePlayersDisplay();
+    });
+}
 
-        console.log('✅ Jogador removido');
+/**
+ * Listener do estado do jogo
+ */
+function setupGameStateListener() {
+    if (gameStateListener) {
+        dbRef.room(roomId).child('gameState').off('value', gameStateListener);
+    }
 
-        // Verificar se sala ficou vazia
-        const playersSnapshot = await dbRef.room(roomId).child('players').once('value');
-        const players = playersSnapshot.val();
+    gameStateListener = dbRef.room(roomId).child('gameState').on('value', (snapshot) => {
+        const state = snapshot.val();
+        
+        if (state) {
+            handleGameStateUpdate(state);
+        }
+    });
+}
 
-        if (!players || Object.keys(players).length === 0) {
-            console.log('🗑️ Sala vazia, deletando completamente...');
-            // Deletar sala completamente se estiver vazia
-            await dbRef.room(roomId).remove();
-            console.log('✅ Sala removida do Firebase');
-        } else {
-            console.log('⚙️ Ainda há jogadores na sala, atualizando status...');
+/**
+ * Atualizar quando o estado do jogo mudar
+ */
+function handleGameStateUpdate(state) {
+    console.log('📊 Estado atualizado:', state.status);
+
+    gameState = state.status || GAME_STATES.SETUP;
+    currentTurnPlayerId = state.currentTurn;
+    
+    // Atualizar cartas dos jogadores
+    if (state.players) {
+        Object.keys(state.players).forEach(playerId => {
+            const playerState = state.players[playerId];
             
-            // Verificar se só restaram bots
-            const onlyBots = Object.values(players).every(p => p.isBot === true);
+            // Renderizar monte do jogador
+            renderPlayerDeck(playerId, playerState.deck || []);
             
-            if (onlyBots) {
-                console.log('🤖 Apenas bots na sala, deletando...');
-                await dbRef.room(roomId).remove();
-                console.log('✅ Sala com apenas bots removida');
-            } else {
-                // Atualizar status da sala para waiting se não estiver jogando
-                const roomSnapshot = await dbRef.room(roomId).once('value');
-                const room = roomSnapshot.val();
-                
-                if (room && room.status === 'playing') {
-                    // Se jogo estava em andamento, marcar como abandonado
-                    await dbRef.room(roomId).update({
-                        status: 'abandoned',
-                        abandonedAt: firebase.database.ServerValue.TIMESTAMP
-                    });
-                    console.log('⚠️ Sala marcada como abandonada');
-                } else {
-                    await dbRef.room(roomId).update({
-                        status: 'waiting'
-                    });
-                }
-                
-                // Transferir host se necessário
-                if (room && room.host === currentUser.uid) {
-                    const remainingPlayers = Object.keys(players).filter(id => !players[id].isBot);
-                    if (remainingPlayers.length > 0) {
-                        const newHost = remainingPlayers[0];
-                        await dbRef.room(roomId).update({
-                            host: newHost
-                        });
-                        console.log('👑 Host transferido para:', newHost);
-                    }
-                }
-            }
-        }
+            // Renderizar cartas coletadas
+            renderPlayerCollected(playerId, playerState.collected || []);
+            
+            // Atualizar progresso
+            updatePlayerProgress(playerId, playerState.collected?.length || 0);
+        });
+    }
 
-        // Remover listeners
-        if (gameStateListener) {
-            dbRef.room(roomId).child('gameState').off('value', gameStateListener);
-        }
-        if (playersListener) {
-            dbRef.room(roomId).child('players').off('value', playersListener);
-        }
+    // Atualizar indicador de turno
+    updateTurnIndicator();
 
-        console.log('✅ Saindo para o lobby...');
-        // Voltar ao lobby
-        window.location.href = 'lobby.html';
-    } catch (error) {
-        console.error('❌ Erro ao sair do jogo:', error);
-        alert('Erro ao sair da sala: ' + error.message);
-        // Mesmo com erro, tentar voltar ao lobby
-        window.location.href = 'lobby.html';
+    // Processar estado
+    switch (gameState) {
+        case GAME_STATES.SHUFFLING:
+            showShuffleAnimation();
+            break;
+        case GAME_STATES.DISTRIBUTING:
+            showMessage('📤 Distribuindo cartas...');
+            break;
+        case GAME_STATES.WAITING_PLAY:
+            hideShuffleAnimation();
+            showMessage(getTurnMessage());
+            enableCardClicks();
+            break;
+        case GAME_STATES.FLIPPING_CARD:
+            disableCardClicks();
+            break;
+        case GAME_STATES.GAME_OVER:
+            handleGameOver(state);
+            break;
     }
 }
 
-// Tornar função global para teste
-window.leaveGame = leaveGame;
+// ========================================
+// RENDERIZAÇÃO DE CARTAS
+// ========================================
 
 /**
- * Voltar ao lobby
+ * Renderizar monte de cartas do jogador
  */
-function returnToLobby() {
-    leaveGame();
+function renderPlayerDeck(playerId, deck) {
+    const isMe = playerId === myPlayerId;
+    const deckElement = document.getElementById(isMe ? 'myDeck' : 'opponentDeck');
+    const countElement = document.getElementById(isMe ? 'myDeckCount' : 'opponentDeckCount');
+    
+    if (!deckElement || !countElement) return;
+
+    deckElement.innerHTML = '';
+    countElement.textContent = deck.length;
+
+    deck.forEach((card, index) => {
+        const cardEl = createCardElement(card, index, playerId);
+        deckElement.appendChild(cardEl);
+    });
+}
+
+/**
+ * Renderizar cartas coletadas do jogador
+ */
+function renderPlayerCollected(playerId, collected) {
+    const isMe = playerId === myPlayerId;
+    const collectedElement = document.getElementById(isMe ? 'myCollected' : 'opponentCollected');
+    const countElement = document.getElementById(isMe ? 'myCollectedCount' : 'opponentCollectedCount');
+    
+    if (!collectedElement || !countElement) return;
+
+    collectedElement.innerHTML = '';
+    countElement.textContent = `${collected.length}/20`;
+
+    collected.forEach((card, index) => {
+        const cardEl = createCardElement(card, index, playerId, true);
+        collectedElement.appendChild(cardEl);
+    });
+}
+
+/**
+ * Criar elemento de carta
+ */
+function createCardElement(card, index, playerId, isCollected = false) {
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.dataset.cardId = card.id;
+    div.dataset.cardIndex = index;
+    div.dataset.playerId = playerId;
+    div.dataset.ownerStyle = card.ownerStyle;
+    
+    if (card.state === CARD_STATES.FACE_UP || card.state === CARD_STATES.RESOLVED) {
+        div.classList.add('flipping');
+    }
+    
+    if (isCollected) {
+        div.classList.add('card-collected', 'disabled');
+    }
+
+    // Se é meu turno e minha carta, permitir clique
+    const isMyTurn = currentTurnPlayerId === myPlayerId;
+    const isMyCard = playerId === myPlayerId;
+    const canClick = isMyTurn && isMyCard && !isCollected && card.state === CARD_STATES.FACE_DOWN;
+    
+    if (canClick) {
+        div.classList.add('clickable');
+        
+        // Click handler
+        const clickHandler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleCardClick(card, index, playerId, div);
+        };
+        
+        // Mouse events
+        div.addEventListener('click', clickHandler);
+        
+        // Touch events (otimizado para mobile)
+        div.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            div.classList.add('card-pressing');
+        }, { passive: false });
+        
+        div.addEventListener('touchend', (e) => {
+            div.classList.remove('card-pressing');
+            clickHandler(e);
+        }, { passive: false });
+        
+        div.addEventListener('touchcancel', () => {
+            div.classList.remove('card-pressing');
+        });
+        
+        // Mouse press visual feedback
+        div.addEventListener('mousedown', () => {
+            div.classList.add('card-pressing');
+        });
+        
+        div.addEventListener('mouseup', () => {
+            div.classList.remove('card-pressing');
+        });
+        
+        div.addEventListener('mouseleave', () => {
+            div.classList.remove('card-pressing');
+        });
+    } else if (!isCollected) {
+        div.classList.add('disabled');
+    }
+
+    // Inner container para flip
+    const inner = document.createElement('div');
+    inner.className = 'card-inner';
+
+    // Verso
+    const back = document.createElement('div');
+    back.className = 'card-back';
+
+    // Frente
+    const front = document.createElement('div');
+    front.className = 'card-front';
+    
+    const img = document.createElement('img');
+    img.className = 'card-image';
+    img.src = card.imagePath;
+    img.alt = 'Carta';
+    img.loading = 'lazy';
+    
+    front.appendChild(img);
+
+    inner.appendChild(back);
+    inner.appendChild(front);
+    div.appendChild(inner);
+
+    return div;
+}
+
+// ========================================
+// INTERAÇÃO COM CARTAS
+// ========================================
+
+/**
+ * Click na carta
+ */
+async function handleCardClick(card, index, playerId, cardElement) {
+    if (gameState !== GAME_STATES.WAITING_PLAY) {
+        console.log('⚠️ Não é possível virar carta agora');
+        showQuickMessage('⚠️ Aguarde...');
+        return;
+    }
+
+    if (currentTurnPlayerId !== myPlayerId) {
+        console.log('⚠️ Não é seu turno');
+        showQuickMessage('⚠️ Não é seu turno');
+        return;
+    }
+
+    console.log('🃏 Virando carta:', card.id);
+
+    try {
+        // Feedback visual imediato - animação de preparação
+        cardElement.classList.add('card-preparing');
+        await new Promise(resolve => setTimeout(resolve, 150));
+        cardElement.classList.remove('card-preparing');
+        
+        // Atualizar estado para FLIPPING
+        await dbRef.room(roomId).child('gameState').update({
+            status: GAME_STATES.FLIPPING_CARD,
+            lastFlippedCard: {
+                cardId: card.id,
+                cardIndex: index,
+                playerId: playerId
+            }
+        });
+
+        // Virar carta localmente com som (se disponível)
+        flipCardAnimation(card.id);
+        playFlipSound();
+
+        // Aguardar animação completa
+        await new Promise(resolve => setTimeout(resolve, 650));
+
+        // Resolver carta
+        await resolveCard(card, index, playerId);
+
+    } catch (error) {
+        console.error('❌ Erro ao virar carta:', error);
+    }
+}
+
+/**
+ * Animação de virar carta
+ */
+function flipCardAnimation(cardId) {
+    const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
+    if (cardEl) {
+        cardEl.classList.add('flipping');
+        
+        // Adicionar classe de animação extra para destaque
+        cardEl.classList.add('card-flipping-active');
+        setTimeout(() => {
+            cardEl.classList.remove('card-flipping-active');
+        }, 650);
+    }
+}
+
+/**
+ * Tocar som de flip (opcional, silencioso se não houver)
+ */
+function playFlipSound() {
+    try {
+        // Som suave de flip (Web Audio API)
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.1);
+    } catch (error) {
+        // Som não é crítico, apenas ignora se der erro
+    }
+}
+
+/**
+ * Mostrar mensagem rápida (toast)
+ */
+function showQuickMessage(text) {
+    const toast = document.createElement('div');
+    toast.className = 'quick-toast';
+    toast.textContent = text;
+    document.body.appendChild(toast);
+    
+    // Animar entrada
+    setTimeout(() => toast.classList.add('show'), 10);
+    
+    // Remover após 2s
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 2000);
+}
+
+/**
+ * Resolver carta (verificar se pertence ao jogador)
+ */
+async function resolveCard(card, index, playerId) {
+    try {
+        console.log('🔍 Resolvendo carta...');
+
+        const belongsToCurrentPlayer = card.ownerStyle === players[playerId].style;
+
+        // Atualizar estado
+        await dbRef.room(roomId).child('gameState').update({
+            status: GAME_STATES.RESOLVING_CARD
+        });
+
+        // Animação de resolução
+        const cardEl = document.querySelector(`[data-card-id="${card.id}"]`);
+        if (cardEl) {
+            cardEl.classList.add(belongsToCurrentPlayer ? 'resolving-success' : 'resolving-transfer');
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Atualizar Firebase
+        if (belongsToCurrentPlayer) {
+            // Carta pertence ao jogador - adicionar às coletadas
+            await moveCardToCollected(playerId, index);
+            showMessage(`✅ ${players[playerId].name} recuperou uma carta!`);
+        } else {
+            // Carta não pertence - transferir para o dono
+            const ownerId = getCardOwnerId(card.ownerStyle);
+            await transferCardToOwner(playerId, index, ownerId);
+            showMessage(`❌ Carta transferida para ${players[ownerId].name}`);
+        }
+
+        // Verificar vitória
+        await checkVictory();
+
+        // Próximo turno
+        await nextTurn();
+
+    } catch (error) {
+        console.error('❌ Erro ao resolver carta:', error);
+    }
+}
+
+/**
+ * Mover carta para coletadas
+ */
+async function moveCardToCollected(playerId, cardIndex) {
+    const gameStateRef = dbRef.room(roomId).child('gameState');
+    const snapshot = await gameStateRef.once('value');
+    const state = snapshot.val();
+
+    const playerDeck = state.players[playerId].deck;
+    const card = playerDeck[cardIndex];
+
+    // Remover do deck
+    playerDeck.splice(cardIndex, 1);
+
+    // Adicionar às coletadas
+    const collected = state.players[playerId].collected || [];
+    collected.push({...card, state: CARD_STATES.RESOLVED});
+
+    await gameStateRef.child(`players/${playerId}`).update({
+        deck: playerDeck,
+        collected: collected
+    });
+}
+
+/**
+ * Transferir carta para o dono
+ */
+async function transferCardToOwner(fromPlayerId, cardIndex, toPlayerId) {
+    const gameStateRef = dbRef.room(roomId).child('gameState');
+    const snapshot = await gameStateRef.once('value');
+    const state = snapshot.val();
+
+    const fromDeck = state.players[fromPlayerId].deck;
+    const card = fromDeck[cardIndex];
+
+    // Remover do deck atual
+    fromDeck.splice(cardIndex, 1);
+
+    // Adicionar às coletadas do dono
+    const toCollected = state.players[toPlayerId].collected || [];
+    toCollected.push({...card, state: CARD_STATES.RESOLVED});
+
+    await gameStateRef.update({
+        [`players/${fromPlayerId}/deck`]: fromDeck,
+        [`players/${toPlayerId}/collected`]: toCollected
+    });
+}
+
+/**
+ * Obter ID do dono da carta pelo estilo
+ */
+function getCardOwnerId(ownerStyle) {
+    for (const [playerId, player] of Object.entries(players)) {
+        if (convertStyle(player.style) === ownerStyle) {
+            return playerId;
+        }
+    }
+    return null;
+}
+
+/**
+ * Próximo turno
+ */
+async function nextTurn() {
+    const playerIds = Object.keys(players);
+    const currentIndex = playerIds.indexOf(currentTurnPlayerId);
+    const nextIndex = (currentIndex + 1) % playerIds.length;
+    const nextPlayerId = playerIds[nextIndex];
+
+    await dbRef.room(roomId).child('gameState').update({
+        currentTurn: nextPlayerId,
+        status: GAME_STATES.WAITING_PLAY
+    });
+}
+
+/**
+ * Verificar vitória
+ */
+async function checkVictory() {
+    const gameStateRef = dbRef.room(roomId).child('gameState');
+    const snapshot = await gameStateRef.once('value');
+    const state = snapshot.val();
+
+    for (const [playerId, playerState] of Object.entries(state.players)) {
+        if (playerState.collected && playerState.collected.length >= 20) {
+            // Jogador venceu!
+            await gameStateRef.update({
+                status: GAME_STATES.GAME_OVER,
+                winner: playerId
+            });
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// ========================================
+// UI E ANIMAÇÕES
+// ========================================
+
+/**
+ * Atualizar display dos jogadores
+ */
+function updatePlayersDisplay() {
+    const playerIds = Object.keys(players);
+    
+    playerIds.forEach((playerId, index) => {
+        const player = players[playerId];
+        const isMe = playerId === myPlayerId;
+        
+        const nameEl = document.getElementById(isMe ? 'myName' : 'opponentName');
+        if (nameEl) {
+            nameEl.textContent = isMe ? `${player.name} (Você)` : player.name;
+        }
+    });
+}
+
+/**
+ * Atualizar progresso
+ */
+function updatePlayerProgress(playerId, collectedCount) {
+    const isMe = playerId === myPlayerId;
+    const progressEl = document.getElementById(isMe ? 'myProgress' : 'opponentProgress');
+    
+    if (progressEl) {
+        const percentage = (collectedCount / 20) * 100;
+        progressEl.style.width = `${percentage}%`;
+    }
+}
+
+/**
+ * Atualizar indicador de turno
+ */
+function updateTurnIndicator() {
+    const indicator = document.getElementById('turnIndicator');
+    if (!indicator) return;
+
+    if (currentTurnPlayerId === myPlayerId) {
+        indicator.textContent = '🎯 Sua vez!';
+        indicator.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+    } else {
+        const opponentName = players[currentTurnPlayerId]?.name || 'Oponente';
+        indicator.textContent = `⏳ Vez de ${opponentName}`;
+        indicator.style.background = 'linear-gradient(135deg, #6b7280, #4b5563)';
+    }
+}
+
+/**
+ * Mensagem de turno
+ */
+function getTurnMessage() {
+    if (currentTurnPlayerId === myPlayerId) {
+        return '🎯 Sua vez! Clique em uma carta para virar';
+    } else {
+        return `⏳ Aguardando jogada de ${players[currentTurnPlayerId]?.name || 'oponente'}...`;
+    }
 }
 
 /**
  * Mostrar mensagem
  */
 function showMessage(text) {
-    const messageDiv = document.getElementById('gameMessage');
-    if (messageDiv) {
-        messageDiv.textContent = text;
-        messageDiv.classList.remove('hidden');
-
-        setTimeout(() => {
-            messageDiv.classList.add('hidden');
-        }, 2000);
+    const messageEl = document.getElementById('gameMessage');
+    if (messageEl) {
+        messageEl.textContent = text;
+        messageEl.style.display = 'block';
     }
 }
 
 /**
- * Limpar listeners ao sair
+ * Mostrar animação de embaralhamento
  */
-window.addEventListener('beforeunload', () => {
-    if (gameStateListener) {
-        dbRef.room(roomId).child('gameState').off('value', gameStateListener);
-    }
-    if (playersListener) {
-        dbRef.room(roomId).child('players').off('value', playersListener);
-    }
+function showShuffleAnimation() {
+    const animEl = document.getElementById('centralAnimation');
+    const shuffleArea = document.getElementById('shuffleArea');
     
-    // Marcar jogador como desconectado
-    if (roomId && currentUser) {
-        dbRef.room(roomId).child('players').child(currentUser.uid).update({
-            connected: false,
-            disconnectedAt: firebase.database.ServerValue.TIMESTAMP
-        });
+    if (!animEl || !shuffleArea) return;
+
+    shuffleArea.innerHTML = '';
+    
+    // Criar cartas de embaralhamento
+    for (let i = 0; i < 40; i++) {
+        const card = document.createElement('div');
+        card.className = 'shuffle-card';
+        shuffleArea.appendChild(card);
     }
-});
+
+    animEl.classList.remove('hidden');
+    showMessage('🔄 Embaralhando cartas...');
+}
 
 /**
- * Monitorar presença do jogador usando Firebase Presence
+ * Esconder animação de embaralhamento
  */
-function setupPresenceSystem() {
-    console.log('🔗 Configurando sistema de presença...');
-    
-    if (!roomId || !currentUser) {
-        console.warn('⚠️ Sem roomId ou currentUser para presença');
-        return;
-    }
-
-    try {
-        const playerRef = dbRef.room(roomId).child('players').child(currentUser.uid);
-        const presenceRef = database.ref('.info/connected');
-
-        presenceRef.on('value', (snapshot) => {
-            if (snapshot.val() === true) {
-                // Conectado
-                playerRef.update({
-                    connected: true,
-                    lastSeen: firebase.database.ServerValue.TIMESTAMP
-                });
-
-                // Configurar onDisconnect para quando desconectar
-                playerRef.onDisconnect().update({
-                    connected: false,
-                    disconnectedAt: firebase.database.ServerValue.TIMESTAMP
-                });
-            }
-        });
-        
-        console.log('✅ Sistema de presença configurado');
-    } catch (error) {
-        console.error('❌ Erro ao configurar presença:', error);
+function hideShuffleAnimation() {
+    const animEl = document.getElementById('centralAnimation');
+    if (animEl) {
+        animEl.classList.add('hidden');
     }
 }
 
 /**
- * Monitorar desconexão do oponente
+ * Habilitar cliques nas cartas
  */
-function monitorOpponentConnection() {
-    console.log('👀 Iniciando monitoramento de oponente...');
-    
-    if (!roomId || !currentUser) {
-        console.warn('⚠️ Sem roomId ou currentUser');
-        return;
-    }
-    
-    if (!roomData || !roomData.players) {
-        console.warn('⚠️ roomData ou players não disponível');
-        return;
-    }
-
-    const playerIds = Object.keys(roomData.players);
-    console.log('👥 PlayerIds para monitoramento:', playerIds);
-    
-    opponentId = playerIds.find(id => id !== currentUser.uid);
-
-    if (!opponentId) {
-        console.warn('⚠️ Nenhum oponente encontrado ainda');
-        return;
-    }
-    
-    console.log('✅ Monitorando oponente:', opponentId);
-
-    // Listener para status de conexão do oponente
-    dbRef.room(roomId).child('players').child(opponentId).child('connected').on('value', async (snapshot) => {
-        const isConnected = snapshot.val();
-        
-        if (isConnected === false) {
-            showMessage('⚠️ Oponente desconectado. Aguardando...');
-            
-            // Pausar jogo temporariamente
-            canReveal = false;
-            clearTurnTimer();
-            
-            // Verificar se oponente é bot
-            const opponentSnapshot = await dbRef.room(roomId).child('players').child(opponentId).once('value');
-            const opponent = opponentSnapshot.val();
-            
-            if (!opponent || opponent.isBot) {
-                console.log('🤖 Oponente é bot, continuando jogo normalmente');
-                canReveal = isMyTurn;
-                return;
-            }
-            
-            // Se ficar desconectado por mais de 30 segundos, substituir por bot
-            setTimeout(async () => {
-                const connSnapshot = await dbRef.room(roomId).child('players').child(opponentId).child('connected').once('value');
-                if (connSnapshot.val() === false) {
-                    if (roomData.host === currentUser.uid && roomData.autoBot !== false) {
-                        // Substituir jogador desconectado por bot
-                        showMessage('🤖 Oponente desconectado. Substituindo por bot...');
-                        await replacePlayerWithBot(opponentId);
-                    } else {
-                        // Oferecer vitória por W.O.
-                        if (confirm('Oponente desconectado há muito tempo. Deseja reivindicar vitória por W.O.?')) {
-                            await endGame(currentUser.uid);
-                        }
-                    }
-                }
-            }, 30000); // 30 segundos
-        } else {
-            // Verificar se não é bot
-            const opponentSnapshot = await dbRef.room(roomId).child('players').child(opponentId).once('value');
-            const opponent = opponentSnapshot.val();
-            
-            if (opponent && !opponent.isBot) {
-                showMessage('✅ Oponente reconectado!');
-                canReveal = isMyTurn;
-            }
-        }
+function enableCardClicks() {
+    const myCards = document.querySelectorAll(`[data-player-id="${myPlayerId}"] .card:not(.flipping):not(.disabled)`);
+    myCards.forEach(card => {
+        card.classList.add('clickable');
+        card.classList.remove('disabled');
     });
 }
 
 /**
- * Substituir jogador por bot
+ * Desabilitar cliques nas cartas
  */
-async function replacePlayerWithBot(playerId) {
+function disableCardClicks() {
+    const allCards = document.querySelectorAll('.card');
+    allCards.forEach(card => {
+        card.classList.remove('clickable');
+        card.classList.add('disabled');
+    });
+}
+
+/**
+ * Fim de jogo
+ */
+function handleGameOver(state) {
+    const winnerId = state.winner;
+    const winner = players[winnerId];
+    
+    const modal = document.getElementById('gameOverModal');
+    const title = document.getElementById('gameOverTitle');
+    const message = document.getElementById('gameOverMessage');
+
+    if (winnerId === myPlayerId) {
+        title.textContent = '🎉 Você Venceu!';
+        message.textContent = 'Parabéns! Você completou seu baralho!';
+    } else {
+        title.textContent = '😔 Fim de Jogo';
+        message.textContent = `${winner.name} venceu a partida!`;
+    }
+
+    modal.classList.remove('hidden');
+}
+
+// ========================================
+// SAIR DO JOGO
+// ========================================
+
+/**
+ * Sair do jogo
+ */
+async function leaveGame() {
     try {
-        console.log('🔄 Substituindo jogador', playerId, 'por bot...');
-        
-        const playerSnapshot = await dbRef.room(roomId).child('players').child(playerId).once('value');
-        const player = playerSnapshot.val();
-        
-        if (!player) return;
-        
-        // Atualizar jogador para bot
-        await dbRef.room(roomId).child('players').child(playerId).update({
-            name: '🤖 Bot (substituiu ' + player.name + ')',
-            isBot: true,
-            connected: true,
-            replacedPlayer: true
-        });
-        
-        console.log('✅ Jogador substituído por bot');
-        showMessage('✅ Bot assumiu a partida');
-        
-        // Recarregar dados da sala
-        const roomSnapshot = await dbRef.room(roomId).once('value');
-        roomData = roomSnapshot.val();
-        
+        if (roomListener) dbRef.room(roomId).off('value', roomListener);
+        if (gameStateListener) dbRef.room(roomId).child('gameState').off('value', gameStateListener);
+
+        window.location.href = 'lobby.html';
     } catch (error) {
-        console.error('❌ Erro ao substituir jogador:', error);
+        console.error('❌ Erro ao sair:', error);
+        window.location.href = 'lobby.html';
     }
 }
 
+window.leaveGame = leaveGame;
+
+// Botão de voltar ao lobby
+document.getElementById('returnToLobby')?.addEventListener('click', leaveGame);

@@ -6,39 +6,73 @@
     <title>Virada da Sorte - Jogo</title>
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/cards.css">
-    <link rel="stylesheet" href="css/cards-free-styles.css">
-    <link rel="stylesheet" href="css/styles-premium.css">
 </head>
 <body class="game-page">
     <div class="container">
         <header class="game-header">
-            <button id="leaveGameBtn" class="btn btn-secondary" onclick="window.leaveGame ? window.leaveGame() : alert('Função não carregada')">Sair da Sala</button>
+            <button id="leaveGameBtn" class="btn btn-secondary" onclick="window.leaveGame ? window.leaveGame() : alert('Função não carregada')">← Sair</button>
             <h2 id="roomNameDisplay">Sala</h2>
             <div class="header-info">
-                <div id="turnIndicator" class="turn-indicator">Aguardando...</div>
-                <div id="turn-timer" class="turn-timer">⏱️ 30s</div>
+                <div id="turnIndicator" class="turn-indicator">Preparando...</div>
             </div>
         </header>
 
-        <!-- Área de Jogadores -->
-        <div class="players-area">
-            <div id="player1Info" class="player-info">
-                <span class="player-name">Jogador 1</span>
-                <span class="player-score">Pontos: 0</span>
+        <!-- Área Principal do Jogo -->
+        <div class="game-container">
+            <!-- Player 2 (Oponente - Topo) -->
+            <div class="player-area player-opponent">
+                <div class="player-header">
+                    <div class="player-info">
+                        <span class="player-name" id="opponentName">Oponente</span>
+                        <span class="player-deck-count" id="opponentDeckCount">20</span>
+                    </div>
+                    <div class="cards-collected">
+                        <span class="collected-label">Recuperadas:</span>
+                        <span class="collected-count" id="opponentCollectedCount">0/20</span>
+                        <div class="collected-bar">
+                            <div class="collected-progress" id="opponentProgress"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="player-deck" id="opponentDeck">
+                    <!-- Monte do oponente -->
+                </div>
+                <div class="player-collected" id="opponentCollected">
+                    <!-- Cartas recuperadas do oponente -->
+                </div>
             </div>
-            <div id="player2Info" class="player-info">
-                <span class="player-name">Aguardando...</span>
-                <span class="player-score">Pontos: 0</span>
+
+            <!-- Área Central (Animações e Mensagens) -->
+            <div class="game-center">
+                <div id="centralAnimation" class="central-animation hidden">
+                    <div class="shuffle-area" id="shuffleArea"></div>
+                </div>
+                <div id="gameMessage" class="game-message"></div>
+            </div>
+
+            <!-- Player 1 (Você - Base) -->
+            <div class="player-area player-you">
+                <div class="player-collected" id="myCollected">
+                    <!-- Cartas recuperadas suas -->
+                </div>
+                <div class="player-deck" id="myDeck">
+                    <!-- Seu monte -->
+                </div>
+                <div class="player-header">
+                    <div class="player-info">
+                        <span class="player-name" id="myName">Você</span>
+                        <span class="player-deck-count" id="myDeckCount">20</span>
+                    </div>
+                    <div class="cards-collected">
+                        <span class="collected-label">Recuperadas:</span>
+                        <span class="collected-count" id="myCollectedCount">0/20</span>
+                        <div class="collected-bar">
+                            <div class="collected-progress" id="myProgress"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-
-        <!-- Tabuleiro de Jogo -->
-        <div id="gameBoard" class="game-board">
-            <!-- Cards serão gerados dinamicamente -->
-        </div>
-
-        <!-- Mensagem de Status -->
-        <div id="gameMessage" class="game-message hidden"></div>
 
         <!-- Modal de Fim de Jogo -->
         <div id="gameOverModal" class="modal hidden">
@@ -64,7 +98,6 @@
     
     <!-- Scripts -->
     <script src="js/firebase.js"></script>
-    <script src="js/styles.js"></script>
     <script src="js/game.js"></script>
 </body>
 </html>

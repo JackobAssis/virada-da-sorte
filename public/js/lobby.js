@@ -358,17 +358,21 @@ function hideStylePreviewModal() {
 /**
  * Carregar salas disponíveis
  */
-function loadRooms() {
+async function loadRooms() {
     const roomsList = document.getElementById('roomsList');
     if (!roomsList) return;
+
+    // Mostrar indicador de carregamento
+    roomsList.innerHTML = '<p style="text-align: center; color: var(--text-muted);"><span class="loading-spinner">🔄</span> Carregando salas...</p>';
 
     // Remover listener anterior se existir
     if (roomsListener) {
         dbRef.rooms().off('value', roomsListener);
+        roomsListener = null;
     }
 
-    // Limpar salas antigas antes de carregar
-    cleanupAbandonedRooms();
+    // Limpar salas antigas antes de carregar (aguardar conclusão)
+    await cleanupAbandonedRooms();
 
     // Ouvir mudanças nas salas
     roomsListener = dbRef.rooms().on('value', (snapshot) => {
@@ -391,6 +395,19 @@ function loadRooms() {
             return;
         }
 
+        // Ordenar salas: salas com jogadores primeiro, depois por data de criação
+        availableRooms.sort(([, a], [, b]) => {
+            const aPlayers = Object.keys(a.players || {}).length;
+            const bPlayers = Object.keys(b.players || {}).length;
+            
+            // Priorizar salas com jogadores
+            if (aPlayers > 0 && bPlayers === 0) return -1;
+            if (aPlayers === 0 && bPlayers > 0) return 1;
+            
+            // Se ambas têm jogadores ou ambas vazias, ordenar por data (mais recente primeiro)
+            return (b.createdAt || 0) - (a.createdAt || 0);
+        });
+
         availableRooms.forEach(([roomId, room]) => {
             const roomItem = document.createElement('div');
             roomItem.className = 'room-item';
@@ -404,16 +421,29 @@ function loadRooms() {
             if (room.isPrivate) {
                 roomName.innerHTML += ' 🔒';
             }
+            if (room.quickPlay) {
+                roomName.innerHTML += ' ⚡';
+            }
 
             const roomDetails = document.createElement('div');
             roomDetails.className = 'room-details';
             
-            const playerCount = Object.keys(room.players || {}).length;
+            // Contar jogadores reais e bots
+            const allPlayers = room.players || {};
+            const playerCount = Object.keys(allPlayers).length;
+            const botCount = Object.values(allPlayers).filter(p => p.isBot).length;
+            const realPlayerCount = playerCount - botCount;
             const maxPlayers = room.maxPlayers || 2;
             
             const playersSpan = document.createElement('span');
             playersSpan.className = 'room-players';
-            playersSpan.textContent = `👥 ${playerCount}/${maxPlayers}`;
+            
+            // Mostrar contagem detalhada
+            if (botCount > 0) {
+                playersSpan.textContent = `👥 ${realPlayerCount}+${botCount}🤖/${maxPlayers}`;
+            } else {
+                playersSpan.textContent = `👥 ${playerCount}/${maxPlayers}`;
+            }
 
             const statusSpan = document.createElement('span');
             statusSpan.className = 'room-status';
@@ -567,12 +597,18 @@ async function joinRoom(roomId, isPrivate) {
  */
 async function attemptJoinRoom(roomId, password = null) {
     try {
+        // Verificar conexão
+        if (!currentUser || !currentUser.uid) {
+            alert('❌ Você precisa estar conectado para entrar em uma sala');
+            return;
+        }
+
         // Verificar se sala ainda está disponível
         const roomSnapshot = await dbRef.room(roomId).once('value');
         const room = roomSnapshot.val();
 
         if (!room) {
-            alert('Sala não encontrada');
+            alert('❌ Sala não encontrada ou foi removida');
             return;
         }
 
@@ -586,15 +622,17 @@ async function attemptJoinRoom(roomId, password = null) {
         }
 
         if (room.status === 'playing') {
-            alert('Sala já está em jogo');
+            alert('❌ Sala já está em jogo');
             return;
         }
 
-        const playerCount = Object.keys(room.players || {}).length;
+        // Contar todos os jogadores (reais + bots)
+        const allPlayers = room.players || {};
+        const playerCount = Object.keys(allPlayers).length;
         const maxPlayers = room.maxPlayers || 2;
         
         if (playerCount >= maxPlayers) {
-            alert('Sala está cheia');
+            alert('❌ Sala está cheia');
             return;
         }
 
@@ -623,9 +661,10 @@ async function attemptJoinRoom(roomId, password = null) {
             await dbRef.room(roomId).update({
                 status: 'full'
             });
+            console.log('📊 Sala ficou cheia:', roomId);
         }
 
-        console.log('✅ Entrou na sala:', roomId);
+        console.log('✅ Entrou na sala:', roomId, `(${newPlayerCount}/${maxPlayers})`);
         hidePasswordModal();
 
         // Entrar na sala de espera
@@ -645,6 +684,7 @@ async function logout() {
         // Remover listener de salas
         if (roomsListener) {
             dbRef.rooms().off('value', roomsListener);
+            roomsListener = null;
         }
         
         // Remover listener de sala de espera
@@ -808,6 +848,12 @@ function enterWaitingRoom(roomId) {
 function updateWaitingRoomDisplay(room) {
     // Nome da sala
     document.getElementById('waitingRoomName').textContent = room.name;
+    
+    // Mostrar painel de controle se for host
+    const hostPanel = document.getElementById('hostControlPanel');
+    if (hostPanel) {
+        hostPanel.style.display = room.host === currentUser.uid ? 'block' : 'none';
+    }
 
     // Info da sala
     if (room.isPrivate) {
@@ -816,8 +862,17 @@ function updateWaitingRoomDisplay(room) {
 
     // Status
     const statusEl = document.getElementById('roomStatus');
+    const isHost = room.host === currentUser.uid;
+    
     if (room.status === 'waiting') {
-        statusEl.textContent = 'Aguardando jogadores...';
+        if (isHost && room.autoBot !== false) {
+            const vacancies = maxPlayers - playerCount;
+            statusEl.textContent = vacancies > 0 
+                ? `Aguardando (${vacancies} bot${vacancies > 1 ? 's' : ''} será${vacancies > 1 ? 'ão' : ''} adicionado${vacancies > 1 ? 's' : ''})`
+                : 'Sala cheia - Pronto para iniciar';
+        } else {
+            statusEl.textContent = 'Aguardando jogadores...';
+        }
     } else if (room.status === 'full') {
         statusEl.textContent = 'Sala cheia - Aguardando início';
     } else if (room.status === 'playing') {
@@ -844,6 +899,9 @@ function updateWaitingRoomDisplay(room) {
         if (playerId === room.host) {
             playerName.textContent += ' 👑';
         }
+        if (player.isBot) {
+            playerName.textContent += ' 🤖';
+        }
 
         const playerReady = document.createElement('span');
         playerReady.className = 'player-ready-status';
@@ -851,6 +909,17 @@ function updateWaitingRoomDisplay(room) {
 
         playerItem.appendChild(playerName);
         playerItem.appendChild(playerReady);
+        
+        // Botão de remover (só para host e se não for ele mesmo)
+        if (room.host === currentUser.uid && playerId !== currentUser.uid && !player.isBot) {
+            const kickBtn = document.createElement('button');
+            kickBtn.className = 'btn-kick';
+            kickBtn.textContent = '❌';
+            kickBtn.title = 'Remover jogador';
+            kickBtn.onclick = () => kickPlayer(playerId, player.name);
+            playerItem.appendChild(kickBtn);
+        }
+        
         playersList.appendChild(playerItem);
     });
 
@@ -864,10 +933,30 @@ function updateWaitingRoomDisplay(room) {
         readyBtn.classList.toggle('active', myPlayer.ready);
     }
 
-    // Botão de iniciar (só para host e se todos prontos)
-    if (room.host === currentUser.uid && startBtn) {
-        const allReady = Object.values(room.players).every(p => p.ready);
-        startBtn.style.display = (allReady && playerCount >= 2) ? 'block' : 'none';
+    // Botão de iniciar - Lógica melhorada para host
+    if (startBtn) {
+        if (room.host === currentUser.uid) {
+            // Host pode ver o botão se:
+            // 1. Todos estão prontos OU
+            // 2. Pelo menos 1 jogador (o host) e tem autoBot
+            const allReady = Object.values(room.players).every(p => p.ready);
+            const canStartWithBot = playerCount >= 1 && room.autoBot !== false;
+            const hostIsReady = myPlayer && myPlayer.ready;
+            
+            // Mostrar se todos prontos OU se host está pronto e pode adicionar bot
+            const canStart = allReady || (hostIsReady && canStartWithBot);
+            startBtn.style.display = canStart ? 'block' : 'none';
+            
+            // Atualizar texto do botão
+            if (playerCount < maxPlayers && room.autoBot !== false) {
+                const botsNeeded = maxPlayers - playerCount;
+                startBtn.textContent = `🎮 Iniciar (+${botsNeeded}🤖)`;
+            } else {
+                startBtn.textContent = '🎮 Iniciar Partida';
+            }
+        } else {
+            startBtn.style.display = 'none';
+        }
     }
 }
 
@@ -888,6 +977,46 @@ async function toggleReady() {
         });
     } catch (error) {
         console.error('❌ Erro ao alterar estado:', error);
+    }
+}
+
+/**
+ * Remover jogador da sala (host)
+ */
+async function kickPlayer(playerId, playerName) {
+    if (!currentRoomId) return;
+    
+    const confirmed = confirm(`Remover ${playerName} da sala?`);
+    if (!confirmed) return;
+    
+    try {
+        const roomSnapshot = await dbRef.room(currentRoomId).once('value');
+        const room = roomSnapshot.val();
+        
+        if (!room || room.host !== currentUser.uid) {
+            alert('❌ Apenas o host pode remover jogadores');
+            return;
+        }
+        
+        // Remover jogador
+        await dbRef.room(currentRoomId).child('players').child(playerId).remove();
+        
+        // Atualizar contagem
+        const newPlayerCount = Object.keys(room.players).length - 1;
+        const maxPlayers = room.maxPlayers || 2;
+        
+        // Se sala não está mais cheia, voltar para 'waiting'
+        if (room.status === 'full' && newPlayerCount < maxPlayers) {
+            await dbRef.room(currentRoomId).update({
+                status: 'waiting'
+            });
+        }
+        
+        showMessage(`✅ ${playerName} foi removido da sala`);
+        console.log('👋 Jogador removido:', playerId);
+    } catch (error) {
+        console.error('❌ Erro ao remover jogador:', error);
+        alert('Erro ao remover jogador');
     }
 }
 

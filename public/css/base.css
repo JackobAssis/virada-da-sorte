@@ -983,6 +983,30 @@ input:focus {
     margin: var(--spacing-lg) 0;
 }
 
+/* Painel de Controle do Host */
+.host-control-panel {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
+    border: 2px solid rgba(251, 191, 36, 0.3);
+    border-radius: 12px;
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+    text-align: center;
+}
+
+.host-badge {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--warning);
+    margin-bottom: var(--spacing-sm);
+}
+
+.host-info {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin: 0;
+    line-height: 1.5;
+}
+
 .info-item {
     display: flex;
     justify-content: space-between;
@@ -1016,10 +1040,15 @@ input:focus {
     justify-content: space-between;
     align-items: center;
     margin-bottom: var(--spacing-sm);
+    gap: var(--spacing-md);
 }
 
 .waiting-player-item.ready {
     border-color: var(--success);
+}
+
+.player-name {
+    flex: 1;
 }
 
 .player-ready-status {
@@ -1030,6 +1059,24 @@ input:focus {
 .waiting-player-item.ready .player-ready-status {
     color: var(--success);
     font-weight: 600;
+}
+
+/* Botão de remover jogador */
+.btn-kick {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.btn-kick:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    transform: scale(1.1);
 }
 
 .waiting-room-actions {
