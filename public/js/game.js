@@ -137,13 +137,21 @@ async function initializeGame() {
             const isQuickPlay = roomData.quickPlay === true;
             
             if (isQuickPlay && roomData.host === currentUser.uid) {
-                console.log('⚡ Quick Play detectado, adicionando bot e iniciando...');
+                console.log('⚡ Quick Play detectado, adicionando bots e iniciando...');
                 
-                // Verificar se precisa de bot
-                const needsBot = currentPlayerCount < maxPlayers && roomData.autoBot !== false;
-                if (needsBot) {
-                    await addBotPlayer();
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                // Calcular quantos bots são necessários
+                const botsNeeded = maxPlayers - currentPlayerCount;
+                const needsBots = botsNeeded > 0 && roomData.autoBot !== false;
+                
+                if (needsBots) {
+                    console.log(`🤖 Adicionando ${botsNeeded} bot(s)...`);
+                    
+                    for (let i = 0; i < botsNeeded; i++) {
+                        await addBotPlayer();
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    }
+                    
+                    console.log(`✅ ${botsNeeded} bot(s) adicionado(s)`);
                 }
                 
                 await initializeGameState();
@@ -313,8 +321,7 @@ async function addBotPlayer() {
         console.log('✅ Bot adicionado à sala');
         
         // Recarregar dados da sala
-        const roomSnapshot = await dbRef.room(roomId).once('value');
-        roomData = roomSnapshot.val();
+        roomData = room;
         
     } catch (error) {
         console.error('❌ Erro ao adicionar bot:', error);
@@ -381,14 +388,19 @@ function setupGameListeners() {
                 if (room) {
                     const playerCount = Object.keys(room.players || {}).length;
                     const maxPlayers = room.maxPlayers || 2;
-                    const needsBot = playerCount < maxPlayers && room.autoBot !== false;
+                    const botsNeeded = maxPlayers - playerCount;
+                    const needsBots = botsNeeded > 0 && room.autoBot !== false;
                     
-                    if (needsBot) {
-                        console.log('🤖 Adicionando bot antes de iniciar partida...');
-                        await addBotPlayer();
+                    if (needsBots) {
+                        console.log(`🤖 Adicionando ${botsNeeded} bot(s) antes de iniciar partida...`);
                         
-                        // Aguardar e recarregar
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        // Adicionar bots necessários
+                        for (let i = 0; i < botsNeeded; i++) {
+                            await addBotPlayer();
+                            await new Promise(resolve => setTimeout(resolve, 300));
+                        }
+                        
+                        console.log(`✅ ${botsNeeded} bot(s) adicionado(s)`);
                     }
                 }
                 
