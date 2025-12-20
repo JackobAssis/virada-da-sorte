@@ -31,7 +31,9 @@ const STYLE_MAP = {
     'arcane-sigil': 'simbolos',
     'shadow-realm': 'dark',
     'celestial-burst': 'personagens',
-    'prism-wave': 'animais'
+    'prism-wave': 'animais',
+    'flux-ember': 'dark',
+    'minimal-prime': 'personagens'
 };
 
 // ========================================
@@ -218,7 +220,8 @@ async function addBotPlayer() {
         }
         
         const botId = 'bot_' + Date.now();
-        const botStyles = ['neon-circuit', 'arcane-sigil', 'shadow-realm', 'celestial-burst', 'prism-wave'];
+        // Usar apenas os estilos base disponíveis
+        const botStyles = ['neon-circuit', 'arcane-sigil', 'flux-ember', 'minimal-prime'];
         const randomStyle = botStyles[Math.floor(Math.random() * botStyles.length)];
         
         // Adicionar bot aos jogadores
@@ -233,7 +236,7 @@ async function addBotPlayer() {
             isBot: true
         });
 
-        console.log('✅ Bot adicionado:', botId);
+        console.log('✅ Bot adicionado:', botId, 'com estilo:', randomStyle);
         
     } catch (error) {
         console.error('❌ Erro ao adicionar bot:', error);
@@ -415,6 +418,8 @@ function handleGameStateUpdate(state) {
             hideShuffleAnimation();
             showMessage(getTurnMessage());
             enableCardClicks();
+            // Se é turno do bot, executar jogada automaticamente
+            checkAndExecuteBotTurn(state);
             break;
         case GAME_STATES.FLIPPING_CARD:
             disableCardClicks();
@@ -682,8 +687,15 @@ function showQuickMessage(text) {
 async function resolveCard(card, index, playerId) {
     try {
         console.log('🔍 Resolvendo carta...');
+        console.log('Carta ownerStyle:', card.ownerStyle);
+        console.log('Jogador style:', players[playerId]?.style);
 
-        const belongsToCurrentPlayer = card.ownerStyle === players[playerId].style;
+        // CORRIGIDO: Converter estilo do jogador para comparação
+        const playerConvertedStyle = convertStyle(players[playerId]?.style || 'cyber');
+        const belongsToCurrentPlayer = card.ownerStyle === playerConvertedStyle;
+        
+        console.log('Estilo convertido do jogador:', playerConvertedStyle);
+        console.log('Pertence ao jogador?', belongsToCurrentPlayer);
 
         // Atualizar estado
         await dbRef.room(roomId).child('gameState').update({
@@ -706,8 +718,14 @@ async function resolveCard(card, index, playerId) {
         } else {
             // Carta não pertence - transferir para o dono
             const ownerId = getCardOwnerId(card.ownerStyle);
-            await transferCardToOwner(playerId, index, ownerId);
-            showMessage(`❌ Carta transferida para ${players[ownerId].name}`);
+            if (ownerId) {
+                await transferCardToOwner(playerId, index, ownerId);
+                showMessage(`↩️ Carta devolvida para ${players[ownerId].name}`);
+            } else {
+                console.error('❌ Dono da carta não encontrado!');
+                // Se não encontrar dono, descartar carta
+                await moveCardToCollected(playerId, index);
+            }
         }
 
         // Verificar vitória
@@ -759,13 +777,14 @@ async function transferCardToOwner(fromPlayerId, cardIndex, toPlayerId) {
     // Remover do deck atual
     fromDeck.splice(cardIndex, 1);
 
-    // Adicionar às coletadas do dono
-    const toCollected = state.players[toPlayerId].collected || [];
-    toCollected.push({...card, state: CARD_STATES.RESOLVED});
+    // CORRIGIDO: Adicionar ao FINAL do deck do dono (não em collected)
+    const toDeck = state.players[toPlayerId].deck || [];
+    card.state = CARD_STATES.FACE_DOWN; // Resetar estado
+    toDeck.push(card);
 
     await gameStateRef.update({
         [`players/${fromPlayerId}/deck`]: fromDeck,
-        [`players/${toPlayerId}/collected`]: toCollected
+        [`players/${toPlayerId}/deck`]: toDeck
     });
 }
 
@@ -837,6 +856,86 @@ function updatePlayersDisplay() {
             nameEl.textContent = isMe ? `${player.name} (Você)` : player.name;
         }
     });
+}
+
+// ========================================
+// LÓGICA DO BOT
+// ========================================
+
+/**
+ * Verificar e executar turno do bot
+ */
+function checkAndExecuteBotTurn(state) {
+    if (!state || !state.currentTurn) return;
+    
+    const currentPlayer = state.players?.[state.currentTurn];
+    
+    // Verificar se é turno do bot
+    if (currentPlayer?.isBot === true) {
+        console.log('🤖 É turno do bot, executando jogada...');
+        
+        // Delay para parecer mais natural (1-2 segundos)
+        const delay = 1000 + Math.random() * 1000;
+        setTimeout(() => {
+            botPlayTurn(state.currentTurn, state);
+        }, delay);
+    }
+}
+
+/**
+ * Bot executa sua jogada
+ */
+async function botPlayTurn(botId, state) {
+    try {
+        // Verificar se ainda é turno do bot
+        const currentState = await dbRef.room(roomId).child('gameState').once('value');
+        const latestState = currentState.val();
+        
+        if (latestState.currentTurn !== botId) {
+            console.log('⚠️ Não é mais turno do bot');
+            return;
+        }
+        
+        if (latestState.status !== GAME_STATES.WAITING_PLAY) {
+            console.log('⚠️ Estado não permite jogada');
+            return;
+        }
+        
+        const botDeck = latestState.players[botId].deck;
+        
+        if (!botDeck || botDeck.length === 0) {
+            console.log('⚠️ Bot não tem cartas');
+            await nextTurn();
+            return;
+        }
+        
+        console.log('🤖 Bot virando carta...');
+        
+        // Pegar primeira carta do deck
+        const card = botDeck[0];
+        const cardIndex = 0;
+        
+        // Atualizar estado para FLIPPING
+        await dbRef.room(roomId).child('gameState').update({
+            status: GAME_STATES.FLIPPING_CARD,
+            currentFlippingCard: {
+                playerId: botId,
+                cardIndex: cardIndex,
+                card: card
+            }
+        });
+        
+        // Aguardar animação
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // CORRIGIDO: Resolver carta passando objeto completo
+        await resolveCard(card, cardIndex, botId);
+        
+    } catch (error) {
+        console.error('❌ Erro no turno do bot:', error);
+        // Em caso de erro, passar turno
+        await nextTurn();
+    }
 }
 
 /**
