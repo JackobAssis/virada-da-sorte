@@ -20,8 +20,35 @@
         </header>
 
         <div class="lobby-content">
-            <!-- Tela Inicial: Escolha de Modo de Jogo -->
-            <section id="gameModeSection" class="game-mode-section">
+            <!-- Tela Inicial: LOBBY Principal -->
+            <section id="mainLobbySection" class="main-lobby-section">
+                <h2>🎮 Lobby Principal</h2>
+                <div class="lobby-actions-grid">
+                    <button class="lobby-action-card" id="quickPlayBtn">
+                        <div class="action-icon">⚡</div>
+                        <h3>Jogar Rápido</h3>
+                        <p>Partida rápida com bot</p>
+                    </button>
+                    <button class="lobby-action-card" id="browseSalasBtn">
+                        <div class="action-icon">🏠</div>
+                        <h3>Painel de Salas</h3>
+                        <p>Ver salas disponíveis</p>
+                    </button>
+                    <button class="lobby-action-card" id="createSalaBtn">
+                        <div class="action-icon">➕</div>
+                        <h3>Criar Sala</h3>
+                        <p>Nova sala pública/privada</p>
+                    </button>
+                    <button class="lobby-action-card" id="openGameModesBtn">
+                        <div class="action-icon">🎯</div>
+                        <h3>Modos de Jogo</h3>
+                        <p>Ranqueado, Treino, etc</p>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Tela de Modos de Jogo (agora secundária) -->
+            <section id="gameModeSection" class="game-mode-section hidden">
                 <h2>🎮 Como Deseja Jogar?</h2>
                 <div class="game-modes-grid">
                     <button class="game-mode-card" data-mode="casual">
@@ -51,7 +78,7 @@
 
             <!-- Seção de Estilos (oculta inicialmente) -->
             <section id="stylesSection" class="styles-section hidden">
-                <button id="backToModes" class="btn-back">← Voltar</button>
+                <button id="backToMainLobby" class="btn-back">← Voltar ao Lobby</button>
                 <h2>Escolha seu Estilo de Cartas</h2>
                 <div id="stylesGrid" class="styles-grid">
                     <!-- Estilos serão carregados dinamicamente -->
@@ -59,28 +86,117 @@
                 <button id="confirmStyleBtn" class="btn btn-primary btn-large">Continuar</button>
             </section>
 
-            <!-- Seção de Salas (oculta inicialmente) -->
+            <!-- Seção de Salas - PAINEL DE SALAS (oculta inicialmente) -->
             <section id="roomsSection" class="rooms-section hidden">
-                <button id="backToStyles" class="btn-back">← Voltar</button>
-                <h2>Salas de Jogo</h2>
+                <button id="backToMainLobbyFromRooms" class="btn-back">← Voltar ao Lobby</button>
+                <h2>📋 Painel de Salas</h2>
+                <div class="room-filters">
+                    <button class="filter-btn active" data-filter="all">Todas</button>
+                    <button class="filter-btn" data-filter="waiting">Aguardando</button>
+                    <button class="filter-btn" data-filter="private">Privadas</button>
+                </div>
                 <div class="room-actions">
-                    <button id="createRoomBtn" class="btn btn-primary">Criar Sala</button>
-                    <button id="refreshRoomsBtn" class="btn btn-secondary">Atualizar</button>
+                    <button id="createRoomFromPanelBtn" class="btn btn-primary">➕ Criar Sala</button>
+                    <button id="refreshRoomsBtn" class="btn btn-secondary">🔄 Atualizar</button>
                 </div>
                 <div id="roomsList" class="rooms-list">
                     <!-- Salas serão carregadas dinamicamente -->
                 </div>
             </section>
+
+            <!-- Seção de Sala de Espera (quando entra em uma sala) -->
+            <section id="waitingRoomSection" class="waiting-room-section hidden">
+                <button id="leaveWaitingRoomBtn" class="btn-back">← Sair da Sala</button>
+                <div class="waiting-room-container">
+                    <h2 id="waitingRoomName">Sala #123</h2>
+                    <div class="room-info-box">
+                        <div class="info-item">
+                            <span class="info-label">Status:</span>
+                            <span id="roomStatus" class="info-value">Aguardando jogadores</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Jogadores:</span>
+                            <span id="roomPlayersCount" class="info-value">1/2</span>
+                        </div>
+                        <div class="info-item" id="roomPasswordInfo" style="display: none;">
+                            <span class="info-label">🔒</span>
+                            <span class="info-value">Sala Privada</span>
+                        </div>
+                    </div>
+                    <div id="waitingRoomPlayers" class="waiting-room-players">
+                        <!-- Jogadores serão listados aqui -->
+                    </div>
+                    <div class="waiting-room-actions">
+                        <button id="readyBtn" class="btn btn-primary btn-large">✓ Pronto</button>
+                        <button id="startGameBtn" class="btn btn-success btn-large" style="display: none;">🎮 Iniciar Partida</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Modal de Jogar Rápido -->
+        <div id="quickPlayModal" class="modal hidden">
+            <div class="modal-content">
+                <h3>⚡ Jogar Rápido</h3>
+                <p>Escolha o modo de jogo:</p>
+                <div class="quick-play-options">
+                    <button class="quick-play-btn" data-players="2">
+                        <span class="qp-icon">👤👤</span>
+                        <span>1v1</span>
+                    </button>
+                    <button class="quick-play-btn" data-players="4">
+                        <span class="qp-icon">👥</span>
+                        <span>4 Jogadores</span>
+                        <small class="coming-soon-small">Em breve</small>
+                    </button>
+                </div>
+                <button id="cancelQuickPlay" class="btn btn-secondary">Cancelar</button>
+            </div>
         </div>
 
         <!-- Modal de Criação de Sala -->
         <div id="createRoomModal" class="modal hidden">
             <div class="modal-content">
-                <h3>Criar Nova Sala</h3>
-                <input type="text" id="roomName" placeholder="Nome da sala" maxlength="20">
+                <h3>➕ Criar Nova Sala</h3>
+                <input type="text" id="roomName" placeholder="Nome da sala" maxlength="30">
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="roomIsPrivate">
+                        🔒 Sala Privada (com senha)
+                    </label>
+                </div>
+                <div id="passwordGroup" class="form-group" style="display: none;">
+                    <input type="password" id="roomPassword" placeholder="Digite a senha" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label>Jogadores:</label>
+                    <select id="roomMaxPlayers">
+                        <option value="2">2 Jogadores (1v1)</option>
+                        <option value="4" disabled>4 Jogadores (Em breve)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="roomAutoBot" checked>
+                        🤖 Bot automático se faltar jogador
+                    </label>
+                </div>
                 <div class="modal-actions">
                     <button id="confirmCreateRoom" class="btn btn-primary">Criar</button>
                     <button id="cancelCreateRoom" class="btn btn-secondary">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Senha para Entrar em Sala Privada -->
+        <div id="passwordModal" class="modal hidden">
+            <div class="modal-content">
+                <h3>🔒 Sala Privada</h3>
+                <p>Digite a senha para entrar:</p>
+                <input type="password" id="enterRoomPassword" placeholder="Senha" maxlength="20">
+                <div class="modal-actions">
+                    <button id="confirmPassword" class="btn btn-primary">Entrar</button>
+                    <button id="cancelPassword" class="btn btn-secondary">Cancelar</button>
                 </div>
             </div>
         </div>

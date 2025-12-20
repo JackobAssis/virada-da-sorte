@@ -79,31 +79,26 @@ async function initializeGame() {
         // Exibir nome da sala
         document.getElementById('roomNameDisplay').textContent = roomData.name;
 
-        // Verificar se precisa adicionar bot
+        // Verificar status da sala
+        console.log('📊 Status da sala:', roomData.status);
+
         const playerCount = Object.keys(roomData.players || {}).length;
-        console.log('👥 Contagem de jogadores:', {
+        const maxPlayers = roomData.maxPlayers || 2;
+        
+        console.log('👥 Análise de jogadores:', {
             playerCount,
+            maxPlayers,
             isHost: roomData.host === currentUser.uid,
+            status: roomData.status,
+            autoBot: roomData.autoBot,
+            quickPlay: roomData.quickPlay,
             players: Object.keys(roomData.players || {})
         });
         
-        if (playerCount === 1 && roomData.host === currentUser.uid) {
-            console.log('⚙️ Apenas 1 jogador detectado, adicionando bot...');
-            await addBotPlayer();
-            
-            // Aguardar um momento e recarregar dados da sala
-            console.log('🔄 Recarregando dados da sala após adicionar bot...');
-            await new Promise(resolve => setTimeout(resolve, 500));
-            const roomSnapshot = await dbRef.room(roomId).once('value');
-            roomData = roomSnapshot.val();
-            console.log('✅ Dados da sala recarregados');
-        } else {
-            console.log('ℹ️ Bot não necessário:', {
-                reason: playerCount > 1 ? 'Mais de 1 jogador' : 'Não é host'
-            });
-        }
+        // Bot só é adicionado quando a partida é INICIADA, não automaticamente
+        // Removida a lógica de adicionar bot aqui
 
-        // Recalcular contagem de jogadores após possível adição do bot
+        // Recalcular contagem de jogadores
         const currentPlayerCount = Object.keys(roomData.players || {}).length;
         console.log('👥 Contagem atual de jogadores:', currentPlayerCount);
 
@@ -114,10 +109,20 @@ async function initializeGame() {
         setupGameListeners();
         
         // Configurar sistema de presença
-        setupPresenceSystem();
+        try {
+            setupPresenceSystem();
+        } catch (presenceError) {
+            console.warn('⚠️ Erro ao configurar sistema de presença:', presenceError);
+        }
         
-        // Monitorar conexão do oponente
-        monitorOpponentConnection();
+        // Monitorar conexão do oponente (só se houver mais de 1 jogador)
+        if (currentPlayerCount >= 2) {
+            try {
+                monitorOpponentConnection();
+            } catch (monitorError) {
+                console.warn('⚠️ Erro ao monitorar oponente:', monitorError);
+            }
+        }
 
         // Verificar se gameState já existe
         console.log('🔍 Verificando se gameState já existe...');
@@ -128,19 +133,63 @@ async function initializeGame() {
             console.log('✅ GameState já existe, carregando...');
             handleGameStateUpdate(existingGameState);
         } else {
-            // Inicializar jogo se for host e tiver 2 jogadores
-            if (roomData.host === currentUser.uid && currentPlayerCount >= 2) {
-                console.log('🎮 Iniciando novo jogo como host...');
+            // Só iniciar automaticamente se for Quick Play
+            const isQuickPlay = roomData.quickPlay === true;
+            
+            if (isQuickPlay && roomData.host === currentUser.uid) {
+                console.log('⚡ Quick Play detectado, adicionando bot e iniciando...');
+                
+                // Verificar se precisa de bot
+                const needsBot = currentPlayerCount < maxPlayers && roomData.autoBot !== false;
+                if (needsBot) {
+                    await addBotPlayer();
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+                await initializeGameState();
+            } else if (roomData.status === 'starting' && roomData.host === currentUser.uid && currentPlayerCount >= 2) {
+                // Status já é 'starting', iniciar direto
+                console.log('🎮 Status "starting" detectado, iniciando jogo...');
                 await initializeGameState();
             } else {
-                console.log('⏳ Aguardando inicialização do jogo:', {
+                console.log('⏳ Aguardando comando para iniciar:', {
                     isHost: roomData.host === currentUser.uid,
-                    playerCount: currentPlayerCount
+                    playerCount: currentPlayerCount,
+                    maxPlayers,
+                    status: roomData.status,
+                    vacancies: maxPlayers - currentPlayerCount,
+                    message: currentPlayerCount < maxPlayers 
+                        ? `Sala com vagas livres (${currentPlayerCount}/${maxPlayers})` 
+                        : 'Sala completa - aguardando host iniciar'
                 });
+                
+                // Mostrar mensagem apropriada
+                if (currentPlayerCount < maxPlayers) {
+                    const vacancies = maxPlayers - currentPlayerCount;
+                    showMessage(`⏳ ${vacancies} ${vacancies === 1 ? 'vaga disponível' : 'vagas disponíveis'}`);
+                } else if (roomData.host === currentUser.uid) {
+                    showMessage('✓ Pronto para iniciar - Volte ao lobby e clique em Iniciar');
+                }
             }
         }
 
         console.log('✅ Jogo inicializado');
+        
+        // Mostrar mensagem de status apropriada
+        if (!existingGameState) {
+            if (roomData.status === 'waiting') {
+                const vacancies = maxPlayers - currentPlayerCount;
+                if (vacancies > 0) {
+                    showMessage(`⏳ Sala aguardando ${vacancies === 1 ? '1 jogador' : vacancies + ' jogadores'}`);
+                } else {
+                    showMessage('✓ Sala completa - Aguardando host iniciar');
+                }
+            } else if (roomData.status === 'starting') {
+                showMessage('🎮 Jogo iniciando...');
+            } else if (roomData.quickPlay) {
+                showMessage('⚡ Preparando partida rápida...');
+            }
+        }
         
         // Teste de botões
         console.log('🔘 Testando botões:');
@@ -149,7 +198,9 @@ async function initializeGame() {
         
     } catch (error) {
         console.error('❌ Erro ao inicializar jogo:', error);
-        alert('Erro ao carregar jogo');
+        console.error('Stack completo:', error.stack);
+        console.error('Mensagem:', error.message);
+        alert('Erro ao carregar jogo: ' + error.message);
         window.location.href = 'lobby.html';
     }
 }
@@ -209,6 +260,18 @@ async function addBotPlayer() {
             currentUser: currentUser?.uid
         });
         
+        // Verificar se já existe um bot na sala
+        const playersSnapshot = await dbRef.room(roomId).child('players').once('value');
+        const players = playersSnapshot.val();
+        
+        if (players) {
+            const hasBot = Object.values(players).some(p => p.isBot === true);
+            if (hasBot) {
+                console.log('⚠️ Bot já existe na sala, não será adicionado novamente');
+                return;
+            }
+        }
+        
         const botId = 'bot_' + Date.now();
         const botStyles = ['neon-circuit', 'arcane-sigil', 'minimal-prime', 'flux-ember'];
         const randomStyle = botStyles[Math.floor(Math.random() * botStyles.length)];
@@ -230,10 +293,22 @@ async function addBotPlayer() {
             isBot: true
         });
 
-        // Atualizar status da sala
-        await dbRef.room(roomId).update({
-            status: 'full'
-        });
+        // Verificar se a sala ficou completa
+        const updatedPlayersSnapshot = await dbRef.room(roomId).child('players').once('value');
+        const updatedPlayers = updatedPlayersSnapshot.val();
+        const playerCount = Object.keys(updatedPlayers || {}).length;
+        
+        const roomSnapshot = await dbRef.room(roomId).once('value');
+        const room = roomSnapshot.val();
+        const maxPlayers = room.maxPlayers || 2;
+
+        // Atualizar status da sala se ficou completa
+        if (playerCount >= maxPlayers) {
+            await dbRef.room(roomId).update({
+                status: 'full'
+            });
+            console.log('✅ Sala marcada como completa');
+        }
 
         console.log('✅ Bot adicionado à sala');
         
@@ -256,6 +331,28 @@ function setupGameListeners() {
     playersListener = dbRef.room(roomId).child('players').on('value', (snapshot) => {
         const players = snapshot.val();
         console.log('👥 Players atualizado:', players);
+        
+        // Verificar se sala ficou vazia ou só com bots
+        if (!players || Object.keys(players).length === 0) {
+            console.log('⚠️ Sala ficou vazia, retornando ao lobby...');
+            showMessage('Sala encerrada - todos os jogadores saíram');
+            setTimeout(() => {
+                window.location.href = 'lobby.html';
+            }, 2000);
+            return;
+        }
+        
+        // Verificar se só restaram bots
+        const onlyBots = Object.values(players).every(p => p.isBot === true);
+        if (onlyBots) {
+            console.log('🤖 Apenas bots na sala, retornando ao lobby...');
+            showMessage('Sala encerrada - sem jogadores reais');
+            setTimeout(() => {
+                window.location.href = 'lobby.html';
+            }, 2000);
+            return;
+        }
+        
         updatePlayersDisplay(players);
     });
 
@@ -264,6 +361,41 @@ function setupGameListeners() {
         const gameState = snapshot.val();
         console.log('🎮 GameState atualizado via listener:', gameState);
         handleGameStateUpdate(gameState);
+    });
+    
+    // Listener para mudanças no status da sala
+    const statusListener = dbRef.room(roomId).child('status').on('value', async (snapshot) => {
+        const status = snapshot.val();
+        console.log('📊 Status da sala mudou para:', status);
+        
+        // Se o status mudou para 'starting', iniciar o jogo
+        if (status === 'starting' && roomData.host === currentUser.uid) {
+            const gameStateCheck = await dbRef.room(roomId).child('gameState').once('value');
+            if (!gameStateCheck.val()) {
+                console.log('🎮 Status "starting" detectado, verificando necessidade de bot...');
+                
+                // Verificar se precisa adicionar bot ANTES de iniciar
+                const roomSnapshot = await dbRef.room(roomId).once('value');
+                const room = roomSnapshot.val();
+                
+                if (room) {
+                    const playerCount = Object.keys(room.players || {}).length;
+                    const maxPlayers = room.maxPlayers || 2;
+                    const needsBot = playerCount < maxPlayers && room.autoBot !== false;
+                    
+                    if (needsBot) {
+                        console.log('🤖 Adicionando bot antes de iniciar partida...');
+                        await addBotPlayer();
+                        
+                        // Aguardar e recarregar
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                }
+                
+                // Agora sim, inicializar o jogo
+                await initializeGameState();
+            }
+        }
     });
     
     console.log('✅ Listeners configurados');
@@ -1030,7 +1162,7 @@ async function endGame(winnerId) {
         });
 
         // Também atualizar no perfil global
-        await db.ref(`users/${currentUser.uid}`).update({
+        await database.ref(`users/${currentUser.uid}`).update({
             'stats/gamesPlayed': gamesPlayed,
             'stats/gamesWon': gamesWon,
             'stats/winRate': winRate
@@ -1075,15 +1207,50 @@ async function leaveGame() {
         const players = playersSnapshot.val();
 
         if (!players || Object.keys(players).length === 0) {
-            console.log('🗑️ Sala vazia, deletando...');
-            // Deletar sala se estiver vazia
+            console.log('🗑️ Sala vazia, deletando completamente...');
+            // Deletar sala completamente se estiver vazia
             await dbRef.room(roomId).remove();
+            console.log('✅ Sala removida do Firebase');
         } else {
-            console.log('⚙️ Atualizando status da sala...');
-            // Atualizar status da sala
-            await dbRef.room(roomId).update({
-                status: 'waiting'
-            });
+            console.log('⚙️ Ainda há jogadores na sala, atualizando status...');
+            
+            // Verificar se só restaram bots
+            const onlyBots = Object.values(players).every(p => p.isBot === true);
+            
+            if (onlyBots) {
+                console.log('🤖 Apenas bots na sala, deletando...');
+                await dbRef.room(roomId).remove();
+                console.log('✅ Sala com apenas bots removida');
+            } else {
+                // Atualizar status da sala para waiting se não estiver jogando
+                const roomSnapshot = await dbRef.room(roomId).once('value');
+                const room = roomSnapshot.val();
+                
+                if (room && room.status === 'playing') {
+                    // Se jogo estava em andamento, marcar como abandonado
+                    await dbRef.room(roomId).update({
+                        status: 'abandoned',
+                        abandonedAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                    console.log('⚠️ Sala marcada como abandonada');
+                } else {
+                    await dbRef.room(roomId).update({
+                        status: 'waiting'
+                    });
+                }
+                
+                // Transferir host se necessário
+                if (room && room.host === currentUser.uid) {
+                    const remainingPlayers = Object.keys(players).filter(id => !players[id].isBot);
+                    if (remainingPlayers.length > 0) {
+                        const newHost = remainingPlayers[0];
+                        await dbRef.room(roomId).update({
+                            host: newHost
+                        });
+                        console.log('👑 Host transferido para:', newHost);
+                    }
+                }
+            }
         }
 
         // Remover listeners
@@ -1154,41 +1321,69 @@ window.addEventListener('beforeunload', () => {
  * Monitorar presença do jogador usando Firebase Presence
  */
 function setupPresenceSystem() {
-    if (!roomId || !currentUser) return;
+    console.log('🔗 Configurando sistema de presença...');
+    
+    if (!roomId || !currentUser) {
+        console.warn('⚠️ Sem roomId ou currentUser para presença');
+        return;
+    }
 
-    const playerRef = dbRef.room(roomId).child('players').child(currentUser.uid);
-    const presenceRef = db.ref('.info/connected');
+    try {
+        const playerRef = dbRef.room(roomId).child('players').child(currentUser.uid);
+        const presenceRef = database.ref('.info/connected');
 
-    presenceRef.on('value', (snapshot) => {
-        if (snapshot.val() === true) {
-            // Conectado
-            playerRef.update({
-                connected: true,
-                lastSeen: firebase.database.ServerValue.TIMESTAMP
-            });
+        presenceRef.on('value', (snapshot) => {
+            if (snapshot.val() === true) {
+                // Conectado
+                playerRef.update({
+                    connected: true,
+                    lastSeen: firebase.database.ServerValue.TIMESTAMP
+                });
 
-            // Configurar onDisconnect para quando desconectar
-            playerRef.onDisconnect().update({
-                connected: false,
-                disconnectedAt: firebase.database.ServerValue.TIMESTAMP
-            });
-        }
-    });
+                // Configurar onDisconnect para quando desconectar
+                playerRef.onDisconnect().update({
+                    connected: false,
+                    disconnectedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+        });
+        
+        console.log('✅ Sistema de presença configurado');
+    } catch (error) {
+        console.error('❌ Erro ao configurar presença:', error);
+    }
 }
 
 /**
  * Monitorar desconexão do oponente
  */
 function monitorOpponentConnection() {
-    if (!roomId || !roomData || !roomData.players) return;
+    console.log('👀 Iniciando monitoramento de oponente...');
+    
+    if (!roomId || !currentUser) {
+        console.warn('⚠️ Sem roomId ou currentUser');
+        return;
+    }
+    
+    if (!roomData || !roomData.players) {
+        console.warn('⚠️ roomData ou players não disponível');
+        return;
+    }
 
     const playerIds = Object.keys(roomData.players);
+    console.log('👥 PlayerIds para monitoramento:', playerIds);
+    
     opponentId = playerIds.find(id => id !== currentUser.uid);
 
-    if (!opponentId) return;
+    if (!opponentId) {
+        console.warn('⚠️ Nenhum oponente encontrado ainda');
+        return;
+    }
+    
+    console.log('✅ Monitorando oponente:', opponentId);
 
     // Listener para status de conexão do oponente
-    dbRef.room(roomId).child('players').child(opponentId).child('connected').on('value', (snapshot) => {
+    dbRef.room(roomId).child('players').child(opponentId).child('connected').on('value', async (snapshot) => {
         const isConnected = snapshot.val();
         
         if (isConnected === false) {
@@ -1198,19 +1393,74 @@ function monitorOpponentConnection() {
             canReveal = false;
             clearTurnTimer();
             
-            // Se ficar desconectado por mais de 30 segundos, oferecer vitória por W.O.
+            // Verificar se oponente é bot
+            const opponentSnapshot = await dbRef.room(roomId).child('players').child(opponentId).once('value');
+            const opponent = opponentSnapshot.val();
+            
+            if (!opponent || opponent.isBot) {
+                console.log('🤖 Oponente é bot, continuando jogo normalmente');
+                canReveal = isMyTurn;
+                return;
+            }
+            
+            // Se ficar desconectado por mais de 30 segundos, substituir por bot
             setTimeout(async () => {
                 const connSnapshot = await dbRef.room(roomId).child('players').child(opponentId).child('connected').once('value');
                 if (connSnapshot.val() === false) {
-                    if (confirm('Oponente desconectado há muito tempo. Deseja reivindicar vitória por W.O.?')) {
-                        await endGame(currentUser.uid);
+                    if (roomData.host === currentUser.uid && roomData.autoBot !== false) {
+                        // Substituir jogador desconectado por bot
+                        showMessage('🤖 Oponente desconectado. Substituindo por bot...');
+                        await replacePlayerWithBot(opponentId);
+                    } else {
+                        // Oferecer vitória por W.O.
+                        if (confirm('Oponente desconectado há muito tempo. Deseja reivindicar vitória por W.O.?')) {
+                            await endGame(currentUser.uid);
+                        }
                     }
                 }
             }, 30000); // 30 segundos
         } else {
-            showMessage('✅ Oponente reconectado!');
-            canReveal = isMyTurn;
+            // Verificar se não é bot
+            const opponentSnapshot = await dbRef.room(roomId).child('players').child(opponentId).once('value');
+            const opponent = opponentSnapshot.val();
+            
+            if (opponent && !opponent.isBot) {
+                showMessage('✅ Oponente reconectado!');
+                canReveal = isMyTurn;
+            }
         }
     });
+}
+
+/**
+ * Substituir jogador por bot
+ */
+async function replacePlayerWithBot(playerId) {
+    try {
+        console.log('🔄 Substituindo jogador', playerId, 'por bot...');
+        
+        const playerSnapshot = await dbRef.room(roomId).child('players').child(playerId).once('value');
+        const player = playerSnapshot.val();
+        
+        if (!player) return;
+        
+        // Atualizar jogador para bot
+        await dbRef.room(roomId).child('players').child(playerId).update({
+            name: '🤖 Bot (substituiu ' + player.name + ')',
+            isBot: true,
+            connected: true,
+            replacedPlayer: true
+        });
+        
+        console.log('✅ Jogador substituído por bot');
+        showMessage('✅ Bot assumiu a partida');
+        
+        // Recarregar dados da sala
+        const roomSnapshot = await dbRef.room(roomId).once('value');
+        roomData = roomSnapshot.val();
+        
+    } catch (error) {
+        console.error('❌ Erro ao substituir jogador:', error);
+    }
 }
 
